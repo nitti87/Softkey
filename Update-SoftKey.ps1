@@ -1,13 +1,18 @@
-param([ValidateSet('Debug', 'Release')][string]$Configuration = 'Debug')
+param(
+    [ValidateSet('Debug', 'Release')][string]$Configuration = 'Debug',
+    [string]$SignToolPath
+)
 
 # Development entry point. Reuse both existing installers; keep the active Windows
 # registration at its present protected path and never copy personal word files.
 $ErrorActionPreference = 'Stop'
 $shellPath = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+if ($SignToolPath) { $SignToolPath = (Get-Item -LiteralPath $SignToolPath).FullName }
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 if (-not ([Security.Principal.WindowsPrincipal]::new($identity)).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    $worker = Start-Process -FilePath $shellPath -Verb RunAs -WindowStyle Hidden -PassThru `
-        -ArgumentList ('-NoProfile -ExecutionPolicy RemoteSigned -File "{0}" -Configuration {1}' -f $PSCommandPath, $Configuration)
+    $arguments = '-NoProfile -ExecutionPolicy RemoteSigned -File "{0}" -Configuration {1}' -f $PSCommandPath, $Configuration
+    if ($SignToolPath) { $arguments += (' -SignToolPath "{0}"' -f $SignToolPath) }
+    $worker = Start-Process -FilePath $shellPath -Verb RunAs -WindowStyle Hidden -PassThru -ArgumentList $arguments
     # Start-Process -Wait also waits for descendants, including the reopened GUI.
     $worker.WaitForExit()
     exit $worker.ExitCode
@@ -153,7 +158,9 @@ try {
     }
     $sofTypeSnapshot = Get-SoftKeySofTypeSecureSnapshot $machine
     Invoke-SoftKeyPairedUpdate -SeparateLogon $context.Separate -Desktop {
-        Invoke-UpdateChild 'Sign-SoftKey.ps1' @('-Configuration', $Configuration)
+        $signOptions = @('-Configuration', $Configuration)
+        if ($SignToolPath) { $signOptions += @('-SignToolPath', $SignToolPath) }
+        Invoke-UpdateChild 'Sign-SoftKey.ps1' $signOptions
     } -Backup {
         foreach ($path in @([Environment]::GetFolderPath('ProgramFiles'),$logonRoot) + @($logonFiles | ForEach-Object { Join-Path $logonRoot $_ })) { Assert-UpdateFile $path }
         $context.Backup = Join-Path $logonRoot ('.paired-update-' + [Guid]::NewGuid().ToString('N'))
