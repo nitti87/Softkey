@@ -1,7 +1,14 @@
 ﻿$ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 $policyPath = 'HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy'
-$realStateBefore = (Microsoft.PowerShell.Management\Get-ItemProperty -LiteralPath $policyPath).VerifiedAndReputablePolicyState
+
+function Get-ActualPolicyState {
+    if (Test-Path -LiteralPath $policyPath) {
+        (Microsoft.PowerShell.Management\Get-ItemProperty -LiteralPath $policyPath).VerifiedAndReputablePolicyState
+    }
+}
+
+$realStateBefore = Get-ActualPolicyState
 . (Join-Path $root 'SoftKey.Installation.ps1')
 $checkRoot = Join-Path $root ('obj\UIAccessTest\private-install-checks-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $checkRoot | Out-Null
@@ -157,7 +164,7 @@ foreach ($name in 'Install-Local-UIAccess.ps1','Sign-SoftKey.ps1') {
 }
 $passed.Add('Both entry points reject changing SAC during sign-only preparation')
 
-$realStateAfter=(Microsoft.PowerShell.Management\Get-ItemProperty -LiteralPath $policyPath).VerifiedAndReputablePolicyState
+$realStateAfter = Get-ActualPolicyState
 Require ($realStateAfter -eq $realStateBefore) 'The actual SAC state changed during the checks.'
 [pscustomobject]@{Timestamp=(Get-Date).ToString('o');Passed=$passed.Count;Checks=@($passed.ToArray());ActualSACStateBefore=$realStateBefore;ActualSACStateAfter=$realStateAfter;ActualSecurityWritesPerformed=$false} |
     ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $root 'obj\UIAccessTest\private-installer-check-result.json') -Encoding UTF8

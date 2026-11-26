@@ -1,0 +1,56 @@
+name: Build and test SoftKey
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: windows-2025
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Build Windows programs and UI test project
+        run: |
+          $projects = @(
+              'SoftKey.csproj',
+              'Startup/SoftKey.Startup.csproj',
+              'Logon/SoftKey.Logon.csproj',
+              'LockedDesktop/SoftKey.Locked.csproj',
+              'tests/StartupChecks/StartupChecks.csproj'
+          )
+          foreach ($project in $projects) {
+              dotnet build $project --configuration Release -p:EnableUIAccess=true --nologo
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      - name: Run reliability checks
+        run: dotnet run --project tests/ReliabilityChecks/ReliabilityChecks.csproj --configuration Release -- ./bin/Release/net10.0-windows/SoftKey.dll
+
+      - name: Run installer and update checks
+        run: |
+          $scripts = @(
+              'tests/PairedUpdate.Tests.ps1',
+              'tests/LogonInstaller.Tests.ps1',
+              'tests/PrivateInstaller.Tests.ps1'
+          )
+          foreach ($script in $scripts) {
+              pwsh -NoProfile -File $script
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
