@@ -10,7 +10,9 @@
     [switch]$EnableAutomaticStartup,
     [string]$StartupUserSid = '',
     [switch]$DisableSmartAppControl,
-    [string]$SignToolPath = ''
+    [string]$SignToolPath = '',
+    [long]$UpdateBuildNumber = 0,
+    [ValidatePattern('^$|^[0-9a-f]{40}$')][string]$UpdateCommit = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -19,6 +21,10 @@ if ($EnableAutomaticStartup -and -not $IncludeStartup) { throw 'Automatic startu
 if ($IncludeStartup -and -not $StartupUserSid) { $StartupUserSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value }
 if ($StartupUserSid) { $StartupUserSid = ([Security.Principal.SecurityIdentifier]::new($StartupUserSid)).Value }
 if ($SignOnly -and $DisableSmartAppControl) { throw 'SignOnly cannot change Smart App Control.' }
+if (($UpdateBuildNumber -ne 0 -or $UpdateCommit) -and
+    (-not $SignOnly -or -not $IncludeStartup -or $Configuration -ne 'Release' -or $UpdateBuildNumber -lt 1 -or -not $UpdateCommit)) {
+    throw 'Update packages require a Release sign-only build with all components, a build number and a commit.'
+}
 if ($DisableSmartAppControl) {
     Write-Warning 'Den slutliga privata installationen stänger av Smart App Control för hela datorn. Antivirus och realtidsskydd behålls. Möjligheten att slå på Smart App Control igen beror på Windows-versionen.'
     . (Join-Path $PSScriptRoot 'SoftKey.Installation.ps1')
@@ -110,6 +116,7 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
         if ($StartupUserSid) { $arguments += (' -StartupUserSid "{0}"' -f $StartupUserSid) }
         if ($DisableSmartAppControl) { $arguments += ' -DisableSmartAppControl' }
         if ($SignToolPath) { $arguments += (' -SignToolPath "{0}"' -f $SignToolPath) }
+        if ($UpdateBuildNumber -gt 0) { $arguments += " -UpdateBuildNumber $UpdateBuildNumber -UpdateCommit $UpdateCommit" }
         $elevatedProcess = Start-Process -FilePath $powershellExe -Verb RunAs -ArgumentList $arguments -WorkingDirectory $PSScriptRoot -PassThru -Wait -WindowStyle Hidden
         exit $elevatedProcess.ExitCode
     }
@@ -259,6 +266,12 @@ try {
     }
 
     if ($SignOnly) {
+        if ($UpdateBuildNumber -gt 0) {
+            . (Join-Path $PSScriptRoot 'SoftKey.UpdatePackage.ps1')
+            $archive = Join-Path $buildDir "SoftKey-update-$UpdateBuildNumber.zip"
+            New-SoftKeyUpdateArchive -PackageDirectory $stage -ArchivePath $archive -BuildNumber $UpdateBuildNumber `
+                -Commit $UpdateCommit -Certificate $cert
+        }
         Save-Result 'Signed' 'The local test package is signed and verified.' $stagedExe $cert.Thumbprint
         $keepStage = $true
         exit 0

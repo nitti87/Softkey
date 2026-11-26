@@ -54,3 +54,7 @@ jobs:
               pwsh -NoProfile -File $script
               if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }
+
+      - name: Test signed update packages
+        shell: powershell
+        run: ./tests/UpdatePackage.Tests.ps1

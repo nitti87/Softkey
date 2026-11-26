@@ -6,7 +6,11 @@ Användaren har godkänt den senaste avskalade inloggningsvyn men därefter uttr
 
 ### Framtida automatiska uppdateringar
 
-Användaren har frågat hur automatiska uppdateringar ska fungera efter den framtida första versionen. Det är ännu en planeringsfråga; ingen internetbaserad uppdaterare har införts och ingen lagringsplats eller modell för behörighet har valts.
+GitHub Actions bygger och testar varje push till `main`. `New-SoftKeyUpdatePackage.ps1` förbereder ett signerat uppdateringspaket på utvecklingsdatorn för en lyckad körning. Publicering och hämtning i appen återstår.
+
+Skriptet körs i PowerShell 7 från en utcheckning av samma commit som den lyckade GitHub-körningen. Ange körningens numeriska ID, `-SignToolPath` till en lokal Microsoft-signerad SignTool och en GitHub-token via miljövariabeln `SOFTKEY_GITHUB_ACTIONS_TOKEN` med läsrättighet till repots Actions. Signeringen använder det befintliga lokala certifikatet och dess behörigheter.
+
+Skriptet bygger från ett rent utdrag av den testade committen. Paketet `obj\Updates\SoftKey-update-<nummer>.zip` innehåller de fyra SoftKey-delarna och ett signerat manifest med körningens versionsnummer, commit och SHA-256 för samtliga filer. Paketeringen verifierar arkivet före sparning. En befintlig version ersätts aldrig vid omkörning. För att undvika att äldre uppdateringar används kan verifieraren jämföra versionsnumret med den installerade versionen.
 
 `Update-SoftKey.ps1` är utvecklingsdatorns lokala bygg-, signerings- och installationsverktyg. En framtida installerad app ska i stället kunna kontrollera en publicerad version, hämta ett färdigt signerat paket och kontrollera dess äkthet innan installation. Signeringsnyckeln ska stanna på byggdatorn. Skrivbords- och inloggningsdelarna ska uppdateras samordnat, med bevarade ord/inställningar och möjlighet att återgå till fungerande programfiler.
 
