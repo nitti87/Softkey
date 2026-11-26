@@ -12,7 +12,8 @@
     [switch]$DisableSmartAppControl,
     [string]$SignToolPath = '',
     [long]$UpdateBuildNumber = 0,
-    [ValidatePattern('^$|^[0-9a-f]{40}$')][string]$UpdateCommit = ''
+    [ValidatePattern('^$|^[0-9a-f]{40}$')][string]$UpdateCommit = '',
+    [switch]$UnattendedSignOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -21,6 +22,7 @@ if ($EnableAutomaticStartup -and -not $IncludeStartup) { throw 'Automatic startu
 if ($IncludeStartup -and -not $StartupUserSid) { $StartupUserSid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value }
 if ($StartupUserSid) { $StartupUserSid = ([Security.Principal.SecurityIdentifier]::new($StartupUserSid)).Value }
 if ($SignOnly -and $DisableSmartAppControl) { throw 'SignOnly cannot change Smart App Control.' }
+if ($UnattendedSignOnly -and -not $SignOnly) { throw 'Unattended signing is limited to sign-only mode.' }
 if (($UpdateBuildNumber -ne 0 -or $UpdateCommit) -and
     (-not $SignOnly -or -not $IncludeStartup -or $Configuration -ne 'Release' -or $UpdateBuildNumber -lt 1 -or -not $UpdateCommit)) {
     throw 'Update packages require a Release sign-only build with all components, a build number and a commit.'
@@ -79,7 +81,7 @@ function Save-Result([string]$status, [string]$message, [string]$path = '', [str
 if ($Build) {
     try {
         & dotnet build (Join-Path $PSScriptRoot 'SoftKey.csproj') --artifacts-path $buildDir `
-            -c $Configuration -p:EnableUIAccess=true -p:UseSharedCompilation=false -v minimal
+            -c $Configuration -p:EnableUIAccess=true "-p:SoftKeyUpdateBuild=$UpdateBuildNumber" -p:UseSharedCompilation=false -v minimal
         if ($LASTEXITCODE -ne 0) { throw "UIAccess build failed with exit code $LASTEXITCODE." }
         if ($IncludeLogon) {
             & dotnet build (Join-Path $PSScriptRoot 'Logon\SoftKey.Logon.csproj') --artifacts-path $buildDir `
@@ -104,7 +106,7 @@ if ($Build) {
 
 $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
 $principal = [Security.Principal.WindowsPrincipal]::new($identity)
-if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+if (-not $UnattendedSignOnly -and -not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
     try {
         $powershellExe = (Get-Process -Id $PID).Path
         $quotedScript = '"{0}"' -f $PSCommandPath

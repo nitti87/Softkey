@@ -194,6 +194,7 @@ partial class KeyboardWindow
         var items = new StackPanel();
         if (index == 0)
         {
+            items.Children.Add(MenuAction(availableUpdate == null ? "Uppdateringar…" : "Uppdatering tillgänglig…", OpenUpdateSettings));
             items.Children.Add(MenuAction("Startup…", OpenStartupSettings));
             items.Children.Add(MenuSeparator());
             items.Children.Add(MenuAction("Avsluta", Close));

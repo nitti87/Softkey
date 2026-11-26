@@ -1,31 +1,55 @@
-#Requires -Version 7.0
+#Requires -Version 5.1
 param(
     [Parameter(Mandatory)][ValidateRange(1, [long]::MaxValue)][long]$RunId,
-    [Parameter(Mandatory)][string]$SignToolPath
+    [Parameter(Mandatory)][string]$SignToolPath,
+    [switch]$Unattended
 )
 
 $ErrorActionPreference = 'Stop'
 $repository = 'nitti87/Softkey'
-$actionsToken = $env:SOFTKEY_GITHUB_ACTIONS_TOKEN
-if (-not $actionsToken) { throw 'Set SOFTKEY_GITHUB_ACTIONS_TOKEN to a token with read access to the repository Actions.' }
+$environmentToken = $env:SOFTKEY_GITHUB_ACTIONS_TOKEN
 
-$commit = & git -C $PSScriptRoot rev-parse --verify HEAD
-if ($LASTEXITCODE -ne 0 -or $commit -cnotmatch '^[0-9a-f]{40}$') { throw 'A Git checkout of SoftKey is required.' }
+$checkoutCommit = & git -C $PSScriptRoot rev-parse --verify HEAD
+if ($LASTEXITCODE -ne 0 -or $checkoutCommit -cnotmatch '^[0-9a-f]{40}$') { throw 'A Git checkout of SoftKey is required.' }
+$signTool = (Get-Item -LiteralPath $SignToolPath).FullName
+$actionsToken = $environmentToken
+if (-not $actionsToken) {
+    $hiddenToken = Read-Host -Prompt 'GitHub-token (Actions read-only)' -AsSecureString
+    try { $actionsToken = ([pscredential]::new('SoftKey', $hiddenToken)).GetNetworkCredential().Password }
+    finally { $hiddenToken.Dispose() }
+    if (-not $actionsToken) { throw 'A GitHub token is required.' }
+}
 $headers = @{
     Authorization = 'Bearer ' + $actionsToken
     Accept = 'application/vnd.github+json'
     'X-GitHub-Api-Version' = '2022-11-28'
 }
-$run = Invoke-RestMethod -Uri "https://api.github.com/repos/$repository/actions/runs/$RunId" `
-    -Headers $headers -MaximumRedirection 0 -TimeoutSec 25
+try {
+    $run = Invoke-RestMethod -Uri "https://api.github.com/repos/$repository/actions/runs/$RunId" `
+        -Headers $headers -UseBasicParsing -MaximumRedirection 0 -TimeoutSec 25
+} finally {
+    $headers.Clear()
+    $actionsToken = $null
+}
+$commit = $run.head_sha
 if ($run.id -ne $RunId -or $run.status -cne 'completed' -or $run.conclusion -cne 'success' -or
     $run.repository.full_name -ine $repository -or $run.head_repository.full_name -ine $repository -or
     $run.path -cne '.github/workflows/build-and-test.yml' -or $run.event -cne 'push' -or
-    $run.head_branch -cne 'main' -or $run.head_sha -cne $commit -or $run.run_number -lt 1) {
-    throw 'The selected run must be a successful build-and-test run for the checked-out commit pushed to main.'
+    $run.head_branch -cne 'main' -or $commit -cnotmatch '^[0-9a-f]{40}$' -or
+    ($run.run_number -isnot [int] -and $run.run_number -isnot [long]) -or $run.run_number -lt 1) {
+    throw 'The selected run must be a successful build-and-test run for a commit pushed to main.'
 }
 
-$signTool = (Get-Item -LiteralPath $SignToolPath).FullName
+$null = & git -C $PSScriptRoot rev-parse --quiet --verify "${commit}^{commit}"
+if ($LASTEXITCODE -ne 0) { throw 'The tested commit is not in the local checkout history.' }
+& git -C $PSScriptRoot merge-base --is-ancestor $commit $checkoutCommit
+if ($LASTEXITCODE -ne 0) {
+    $remote = & git -C $PSScriptRoot remote get-url origin
+    if ($LASTEXITCODE -ne 0 -or $remote -ine 'https://github.com/nitti87/Softkey.git') { throw 'The tested commit is not in the local checkout history.' }
+    & git -C $PSScriptRoot merge-base --is-ancestor $commit refs/remotes/origin/main
+    if ($LASTEXITCODE -ne 0) { throw 'The tested commit is not in the local checkout history.' }
+}
+Add-Type -AssemblyName System.IO.Compression.FileSystem
 $output = (New-Item -ItemType Directory -Path (Join-Path $PSScriptRoot 'obj\Updates') -Force).FullName
 $name = 'SoftKey-update-{0}.zip' -f $run.run_number
 $target = Join-Path $output $name
@@ -44,12 +68,13 @@ try {
     Push-Location -LiteralPath $source
     try {
         $env:SOFTKEY_GITHUB_ACTIONS_TOKEN = $null
-        & $windowsPowerShell -NoProfile -ExecutionPolicy RemoteSigned -File .\Install-Local-UIAccess.ps1 `
-            -Build -SignOnly -IncludeStartup -Configuration Release -SignToolPath $signTool `
-            -UpdateBuildNumber $run.run_number -UpdateCommit $commit
+        $options = @('-Build','-SignOnly','-IncludeStartup','-Configuration','Release','-SignToolPath',$signTool,
+            '-UpdateBuildNumber',$run.run_number,'-UpdateCommit',$commit)
+        if ($Unattended) { $options += '-UnattendedSignOnly' }
+        & $windowsPowerShell -NoProfile -ExecutionPolicy RemoteSigned -File .\Install-Local-UIAccess.ps1 @options
         if ($LASTEXITCODE -ne 0) { throw "SoftKey signing failed with exit code $LASTEXITCODE." }
     } finally {
-        $env:SOFTKEY_GITHUB_ACTIONS_TOKEN = $actionsToken
+        $env:SOFTKEY_GITHUB_ACTIONS_TOKEN = $environmentToken
         Pop-Location
     }
 
