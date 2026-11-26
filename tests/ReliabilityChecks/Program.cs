@@ -503,7 +503,12 @@ static class Program
         {
             var store = Activator.CreateInstance(assembly.GetType("JsonFileStorage"), folder);
             var result = (Window)Activator.CreateInstance(assembly.GetType("KeyboardWindow"), store);
-            result.Loaded += (_, _) => ((DispatcherTimer)Get(result, "dwellTimer")).Stop();
+            result.Loaded += (_, _) =>
+            {
+                ((DispatcherTimer)Get(result, "dwellTimer")).Stop();
+                // The position checks supply their own pointer updates.
+                Call(result, "DisposeMenuDismissHook");
+            };
             result.Show(); Pump();
             return result;
         }
@@ -537,10 +542,14 @@ static class Program
             Check((bool)Call(window, "BeginWindowDrag", target, Point(initial.X + 10, initial.Y + 10)), "own-window dwell move begins without mouse-button injection");
             ((DispatcherTimer)Get(window, "windowDragFallbackTimer")).Stop();
             cfg.GetType().GetProperty("AutoClick").SetValue(cfg, false);
-            Check((bool)Call(window, "UpdateWindowDrag", Point(initial.X + 30, initial.Y + 30)), "own-window dwell move reaches the new position");
+            Check((bool)Call(window, "UpdateWindowDrag", Point(initial.X + 30, initial.Y + 30)) && Position(target) != initial,
+                "own-window dwell move reaches the new position");
             Pump(450);
             var diskDuring = disk.Load("settings.json", new Settings());
             Check((settingName == "KeyboardPosition" ? diskDuring.KeyboardPosition == diskBefore.KeyboardPosition : diskDuring.DragKeyPosition == diskBefore.DragKeyPosition), "active dwell move defers disk writes until release");
+            if (target != window)
+                Check(Get(window, "dragKeyPreviewPlacement").ToString() == nameof(DragKeyPlacement.Floating),
+                    "the floating DragKey persistence check releases outside the docking zones");
             Check((bool)Call(window, "FinishWindowDrag"), "finishing dwell move saves the new position");
         }
         void ToolbarScreenEdges(Window toolbar)
@@ -775,7 +784,13 @@ static class Program
             ToolbarScreenEdges(toolbar);
             EdgeSnapping(toolbar);
             WindowPositioning.Restore(new System.Windows.Interop.WindowInteropHelper(window).Handle, new(80, 80));
-            WindowPositioning.Restore(new System.Windows.Interop.WindowInteropHelper(toolbar).Handle, new(1200, 180));
+            // A fixed screen coordinate can clamp the toolbar into a dock zone on a smaller display.
+            var layout = (FrameworkElement)Get(window, "dragKeyLayout");
+            Point center = layout.PointToScreen(new Point(layout.ActualWidth / 2, layout.ActualHeight / 2));
+            var toolbarHandle = new System.Windows.Interop.WindowInteropHelper(toolbar).Handle;
+            Check(Native.GetWindowRect(toolbarHandle, out var toolbarBounds) && WindowPositioning.Restore(toolbarHandle,
+                new((int)center.X - (toolbarBounds.Right - toolbarBounds.Left) / 2,
+                    (int)center.Y - (toolbarBounds.Bottom - toolbarBounds.Top) / 2)), "the floating DragKey starts in the center of the keyboard");
             var keyboardPosition = Position(window);
             var toolbarPosition = Position(toolbar);
             Check(ConfigPosition("KeyboardPosition") == keyboardPosition && ConfigPosition("DragKeyPosition") == toolbarPosition, "native moves immediately update both in-memory positions");
