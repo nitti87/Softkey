@@ -1,0 +1,24 @@
+# Build and editor output
+[Bb]in/
+[Oo]bj/
+.vs/
+.codex/
+*.user
+*.suo
+
+# Local installation output and user data
+*.lnk
+UIAccess-install-result.json
+settings.json
+saved-text.json
+logon-settings.json
+
+# Signing keys and credentials
+*.pfx
+*.p12
+*.pem
+*.key
+*.pvk
+*.snk
+.env
+.env.*

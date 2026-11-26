@@ -1,0 +1,92 @@
+using System;
+using System.Windows;
+using System.Windows.Automation;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Media;
+using System.Windows.Shapes;
+
+static class SoftKeySettingsDesign
+{
+    public const double Width = 488;
+    public const string LockGlyph = "M 6,10 V 7 A 4,4 0 0 1 14,7 V 10 M 6,10 H 14 Q 16,10 16,12 V 16 Q 16,18 14,18 H 6 Q 4,18 4,16 V 12 Q 4,10 6,10 Z M 10,13 V 15";
+
+    public static TextBlock Heading(string label) => new()
+    {
+        Text = label, FontSize = 14, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap,
+        Margin = new Thickness(1, 0, 0, 10)
+    };
+
+    public static SoftKeyCheckBox CheckOption(string label, string detail, UIElement icon)
+    {
+        var option = SoftKeyCheckBox.SettingsRow(OptionContent(label, detail, icon));
+        FormatOption(option, label, detail);
+        return option;
+    }
+
+    public static RadioButton RadioOption(string group, string label, string detail, UIElement icon)
+    {
+        var option = SoftKeyCheckBox.RadioRow(group, OptionContent(label, detail, icon));
+        FormatOption(option, label, detail);
+        return option;
+    }
+
+    static void FormatOption(ToggleButton option, string label, string detail)
+    {
+        option.MinHeight = 68;
+        option.Padding = new Thickness(13, 9, 13, 9);
+        option.Margin = new Thickness(0);
+        AutomationProperties.SetName(option, label);
+        AutomationProperties.SetHelpText(option, detail);
+    }
+
+    static DockPanel OptionContent(string label, string detail, UIElement icon)
+    {
+        var text = new StackPanel
+        {
+            Children =
+            {
+                new TextBlock { Text = label, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap },
+                new TextBlock
+                {
+                    Text = detail, FontSize = 12, Foreground = SoftKeyPopupDesign.ActionText,
+                    TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 3, 0, 0)
+                }
+            }
+        };
+        DockPanel.SetDock(icon, Dock.Right);
+        return new DockPanel { Children = { icon, text } };
+    }
+
+    public static Border Icon(string outline) => Icon(new Path
+    {
+        Data = Geometry.Parse(outline), Stroke = SoftKeyPopupDesign.ActionText, StrokeThickness = 1.6,
+        Width = 20, Height = 20, Stretch = Stretch.Uniform, StrokeLineJoin = PenLineJoin.Round,
+        StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
+        HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center
+    });
+
+    public static Border Icon(UIElement artwork) => new()
+    {
+        MinWidth = 38, Height = 38, CornerRadius = new CornerRadius(19), Padding = new Thickness(7, 0, 7, 0),
+        Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
+        Background = SoftKeyPopupDesign.ActionSurface, Child = artwork, IsHitTestVisible = false
+    };
+
+    public static Border Card(UIElement content) => new()
+    {
+        Background = SoftKeyPopupDesign.CardSurface, BorderBrush = SoftKeyPopupDesign.CardBorder,
+        BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(8),
+        Padding = new Thickness(12, 10, 12, 10), Child = content
+    };
+
+    public static void FitDialog(Window window, StackPanel panel, ScrollViewer scroll, double footerReserve, params Button[] actions)
+    {
+        SoftKeyPopupDesign.ConfigureWindow(window, available =>
+        {
+            panel.Width = Math.Min(Width, Math.Max(280, available.Width - 20));
+            scroll.MaxHeight = Math.Max(80, available.Height - footerReserve);
+            foreach (var action in actions) action.Width = Math.Min(90, (panel.Width - 44) / actions.Length);
+        });
+    }
+}

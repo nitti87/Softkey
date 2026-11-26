@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="../../JsonFileStorage.cs" Link="JsonFileStorage.cs" />
+    <Compile Include="../../Settings.cs" Link="Settings.cs" />
+    <Compile Include="../../SingleInstance.cs" Link="SingleInstance.cs" />
+    <Compile Include="../../DragKeyPlacement.cs" Link="DragKeyPlacement.cs" />
+    <Compile Include="../../WindowPosition.cs" Link="WindowPosition.cs" />
+    <Compile Include="../../Native.cs" Link="Native.cs" />
+    <Compile Include="../../DesktopContext.cs" Link="DesktopContext.cs" />
+    <Compile Include="../../LogonSettings.cs" Link="LogonSettings.cs" />
+    <Compile Include="../../KeyboardLayoutSettings.cs" Link="KeyboardLayoutSettings.cs" />
+    <Compile Include="../../KeyboardAreaSize.cs" Link="KeyboardAreaSize.cs" />
+    <Compile Include="../../AutoclickTimingSettings.cs" Link="AutoclickTimingSettings.cs" />
+    <Compile Include="../../SignInDragKeySettings.cs" Link="SignInDragKeySettings.cs" />
+    <Compile Include="../../StartupConfiguration.cs" Link="StartupConfiguration.cs" />
+    <Compile Include="../../StartupInstallation.cs" Link="StartupInstallation.cs" />
+    <Compile Include="../../StartupModels.cs" Link="StartupModels.cs" />
+    <Compile Include="../../StartupTask.cs" Link="StartupTask.cs" />
+    <Compile Include="../../StartupTrust.cs" Link="StartupTrust.cs" />
+    <Compile Include="../../LockSession.cs" Link="LockSession.cs" />
+    <Compile Include="../../VerticalWindowSnap.cs" Link="VerticalWindowSnap.cs" />
+    <Compile Include="../../DragKeyScreenBounds.cs" Link="DragKeyScreenBounds.cs" />
+  </ItemGroup>
+</Project>

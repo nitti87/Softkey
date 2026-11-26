@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <AssemblyName>SoftKey</AssemblyName>
+    <ApplicationManifest Condition="'$(EnableUIAccess)' != 'true'">SoftKey.manifest</ApplicationManifest>
+    <ApplicationManifest Condition="'$(EnableUIAccess)' == 'true'">SoftKey.UIAccess.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="tests/**/*.cs" />
+    <Compile Remove="Logon/**/*.cs" />
+    <Compile Remove="LockedDesktop/**/*.cs" />
+    <Compile Remove="Startup/**/*.cs" />
+    <Compile Remove="Softkey/**/*.cs" />
+    <EmbeddedResource Include="words.json" LogicalName="words.json" />
+  </ItemGroup>
+</Project>
