@@ -66,8 +66,8 @@ sealed class DragKeyWindow : Window
         SizeToContent = SizeToContent.Manual;
         ShowInTaskbar = ShowActivated = Focusable = false;
         FontFamily = new FontFamily("Segoe UI");
-        Foreground = Brush(0x25, 0x35, 0x45);
-        Background = SoftKeyPopupDesign.WindowSurface;
+        Foreground = SoftKeyKeyDesign.PrimaryText;
+        Background = SoftKeyKeyDesign.WindowSurface;
         UseLayoutRounding = SnapsToDevicePixels = true;
         TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
 
@@ -80,13 +80,13 @@ sealed class DragKeyWindow : Window
         titleContent.Children.Add(titleLabel);
         grip = new UniformGrid { Columns = 2, Rows = 3, Width = 8, Height = 10, Margin = new Thickness(12, 0, 0, 0) };
         for (int i = 0; i < 6; i++) grip.Children.Add(new System.Windows.Shapes.Ellipse
-            { Width = 2, Height = 2, Fill = Brush(0x81, 0x90, 0x9E) });
+            { Width = 2, Height = 2, Fill = Brush(0x9A, 0x95, 0x8C) });
         Grid.SetColumn(grip, 1);
         titleContent.Children.Add(grip);
         title = new Border
         {
             Height = size.TitleHeight,
-            Background = SoftKeyPopupDesign.TitleBarSurface, Padding = new Thickness(6, 2, 6, 2),
+            Background = SoftKeyKeyDesign.TraySurface, Padding = new Thickness(6, 2, 6, 2),
             Cursor = Cursors.SizeAll, Child = titleContent
         };
         buttons = new UniformGrid { Columns = autoClickOnly ? 1 : 0, Rows = 1, Margin = size.PanelMargin };
@@ -113,8 +113,8 @@ sealed class DragKeyWindow : Window
         Surface = new Border
         {
             Cursor = Cursors.SizeAll,
-            Background = SoftKeyPopupDesign.WindowSurface,
-            BorderBrush = SoftKeyPopupDesign.Border, BorderThickness = new Thickness(1), Child = body
+            Background = SoftKeyKeyDesign.WindowSurface,
+            BorderBrush = SoftKeyKeyDesign.Outline, BorderThickness = new Thickness(1), Child = body
         };
         Content = Surface;
         Surface.PreviewMouseLeftButtonDown += (_, e) =>
@@ -225,9 +225,9 @@ sealed class DragKeyWindow : Window
         bool resizing = false, bool keyboardHidden = false, bool headerHidden = false)
     {
         System.Windows.Automation.AutomationProperties.SetItemStatus(autoClick, enabled ? "På" : "Av");
-        autoClick.Foreground = Brush(0x1F, 0x3B, 0x53);
-        autoClick.Background = enabled ? autoClick.RestingFace : Brushes.White;
-        autoClick.BorderBrush = enabled ? SoftKeyKeyDesign.Outline : Brush(0xA5, 0xB0, 0xBC);
+        autoClick.Foreground = SoftKeyKeyDesign.SlateAccentText;
+        autoClick.Background = enabled ? autoClick.RestingFace : SoftKeyKeyDesign.LetterFace;
+        autoClick.BorderBrush = enabled ? SoftKeyKeyDesign.Outline : Brush(0xC6, 0xC2, 0xB8);
         bool rightArmed = selected == MouseAction.Right;
         bool doubleArmed = selected == MouseAction.Double;
         bool dragArmed = MouseActionState.IsDragAction(selected);
@@ -262,9 +262,9 @@ sealed class DragKeyWindow : Window
             : "Vila med pekaren för att vänsterklicka.";
         System.Windows.Automation.AutomationProperties.SetHelpText(this, description);
         System.Windows.Automation.AutomationProperties.SetHelpText(Surface, description);
-        stateDot.Fill = !enabled ? Brush(0x81, 0x8A, 0x95)
-            : dragging ? Brush(0xAA, 0x60, 0x10)
-            : selected != MouseAction.Left ? Brush(0xA4, 0x75, 0x0C) : Brush(0x36, 0x6D, 0x98);
+        stateDot.Fill = !enabled ? Brush(0x94, 0x8F, 0x86)
+            : dragging ? Brush(0x9C, 0x5D, 0x2D)
+            : selected != MouseAction.Left ? Brush(0xA1, 0x7C, 0x32) : SoftKeyKeyDesign.SlateAccent;
         System.Windows.Automation.AutomationProperties.SetName(autoClick, enabled ? "AutoClick på" : "AutoClick av");
         System.Windows.Automation.AutomationProperties.SetName(rightClick, rightArmed && rightClick.IsEnabled ? "Högerklick valt – välj mål" : "Högerklick");
     }
@@ -409,8 +409,8 @@ sealed class DragKeyWindow : Window
         SetAction(button, label, selected, enabled && (dragging ? held : actionsAvailable));
         button.ToolTip = label;
         if (!held) return;
-        button.Background = Brush(0xFF, 0xD4, 0x9A);
-        button.BorderBrush = Brush(0x98, 0x5B, 0x18);
+        button.Background = Brush(0xEE, 0xD0, 0xB5);
+        button.BorderBrush = Brush(0x96, 0x59, 0x2C);
         System.Windows.Automation.AutomationProperties.SetName(button, $"{label} pågår – släpp");
         System.Windows.Automation.AutomationProperties.SetItemStatus(button, "Drag pågår");
     }
@@ -435,9 +435,9 @@ sealed class DragKeyWindow : Window
         selected &= enabled;
         System.Windows.Automation.AutomationProperties.SetItemStatus(button,
             !enabled ? "Pausad" : selected ? "Valt - välj mål" : "Redo");
-        button.Background = !enabled ? Brush(0xF0, 0xF2, 0xF5) : selected ? Brush(0xFF, 0xF0, 0xB2) : button.RestingFace;
-        button.BorderBrush = !enabled ? Brush(0xA5, 0xAF, 0xBA) : selected ? Brush(0x8C, 0x65, 0x10) : SoftKeyKeyDesign.Outline;
-        button.Foreground = enabled ? Brush(0x25, 0x35, 0x45) : Brush(0x83, 0x8C, 0x98);
+        button.Background = !enabled ? Brush(0xE4, 0xE1, 0xDA) : selected ? Brush(0xF2, 0xE5, 0xC4) : button.RestingFace;
+        button.BorderBrush = !enabled ? Brush(0xCC, 0xC8, 0xBE) : selected ? Brush(0x94, 0x74, 0x35) : SoftKeyKeyDesign.Outline;
+        button.Foreground = enabled ? SoftKeyKeyDesign.PrimaryText : Brush(0x8C, 0x88, 0x80);
         button.IsEnabled = enabled;
         System.Windows.Automation.AutomationProperties.SetName(button, selected ? label + " valt – välj mål" : label);
     }

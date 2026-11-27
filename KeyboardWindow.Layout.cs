@@ -8,7 +8,7 @@ partial class KeyboardWindow
 {
     const double DesktopHeaderGap = 4, SignInHeaderGap = 8, KeyboardInset = 8;
     const double FunctionGroupGap = 0.24, NavigationGroupGap = 4;
-    static readonly Brush KeyboardTray = new SolidColorBrush(Color.FromRgb(0xDB, 0xE5, 0xEE));
+    static readonly Brush KeyboardTray = SoftKeyKeyDesign.TraySurface;
     Grid keyboardKeyGrid;
     RowDefinition headerSpacing;
 
@@ -85,7 +85,7 @@ partial class KeyboardWindow
         var emptySuggestionsDrawing = new GeometryDrawing
         {
             Geometry = Geometry.Parse("M 6,4 H 18 A 3,3 0 0 1 21,7 V 14 A 3,3 0 0 1 18,17 H 10 L 5,21 V 16.8 A 3,3 0 0 1 3,14 V 7 A 3,3 0 0 1 6,4 Z M 9,10.5 H 15"),
-            Pen = new Pen(new SolidColorBrush(Color.FromRgb(0x7A, 0x82, 0x8C)), 1.4)
+            Pen = new Pen(new SolidColorBrush(Color.FromRgb(0x7A, 0x76, 0x6E)), 1.4)
             {
                 StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round, LineJoin = PenLineJoin.Round
             }
@@ -102,7 +102,7 @@ partial class KeyboardWindow
         suggestionArea.Children.Add(emptySuggestionsIcon);
         var emptySuggestionsSeparator = new Border
         {
-            Width = 1, Background = SoftKeyPopupDesign.Border, Opacity = 0.45,
+            Width = 1, Background = SoftKeyKeyDesign.MutedDivider, Opacity = 0.65,
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 8, 3, 8), IsHitTestVisible = false,
             SnapsToDevicePixels = true
@@ -201,7 +201,7 @@ partial class KeyboardWindow
         deck.ColumnDefinitions.Add(Col(KeyboardLayout.NavigationColumnWeight));
         var tray = new Border
         {
-            Background = KeyboardTray, CornerRadius = new CornerRadius(8),
+            Background = KeyboardTray, CornerRadius = new CornerRadius(10),
             Margin = new Thickness(-2, 0, -2, 0), IsHitTestVisible = false, SnapsToDevicePixels = true
         };
         Grid.SetColumnSpan(tray, 3);

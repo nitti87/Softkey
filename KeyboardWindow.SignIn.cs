@@ -19,7 +19,7 @@ partial class KeyboardWindow
             Child = new Border
             {
                 Width = 32, Height = 3, CornerRadius = new CornerRadius(1.5),
-                Background = SoftKeyPopupDesign.Border,
+                Background = SoftKeyKeyDesign.Shadow,
                 HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
                 IsHitTestVisible = false
             }

@@ -77,7 +77,7 @@ sealed class DragKeyButton : Button
     {
         DragKeySymbol.AutoClick => SoftKeyKeyDesign.AccentFace,
         DragKeySymbol.RightClick or DragKeySymbol.DoubleClick or DragKeySymbol.LeftDrag
-            or DragKeySymbol.RightDrag or DragKeySymbol.MiddleDrag => Brushes.White,
+            or DragKeySymbol.RightDrag or DragKeySymbol.MiddleDrag => SoftKeyKeyDesign.LetterFace,
         _ => SoftKeyKeyDesign.FunctionFace
     };
 
@@ -96,7 +96,7 @@ sealed class DragKeyButton : Button
             });
         var face = new FrameworkElementFactory(typeof(Grid));
         var highlight = new FrameworkElementFactory(typeof(Border), "PointerHighlight");
-        highlight.SetValue(Border.BackgroundProperty, SoftKeyPopupDesign.Accent);
+        highlight.SetValue(Border.BackgroundProperty, SoftKeyKeyDesign.SlateAccent);
         highlight.SetValue(IsHitTestVisibleProperty, false);
         highlight.SetValue(OpacityProperty, 0d);
         face.AppendChild(highlight);
@@ -116,7 +116,7 @@ sealed class DragKeyButton : Button
             var state = new MultiTrigger();
             state.Conditions.Add(new Condition(IsEnabledProperty, true));
             state.Conditions.Add(new Condition(property, true));
-            state.Setters.Add(new Setter(Border.BorderBrushProperty, SoftKeyPopupDesign.Accent, "Frame"));
+            state.Setters.Add(new Setter(Border.BorderBrushProperty, SoftKeyKeyDesign.SlateAccent, "Frame"));
             state.Setters.Add(new Setter(OpacityProperty, opacity, "PointerHighlight"));
             return state;
         }

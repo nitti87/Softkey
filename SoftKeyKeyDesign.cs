@@ -9,12 +9,28 @@ using System.Windows.Media;
 static class SoftKeyKeyDesign
 {
     public const double LegendTextScale = 1.14;
-    public static readonly CornerRadius Radius = new(6);
-    public static readonly Brush FunctionFace = new SolidColorBrush(Color.FromRgb(0xE7, 0xEF, 0xF7));
-    public static readonly Brush ModifierFace = new SolidColorBrush(Color.FromRgb(0xD1, 0xE0, 0xEE));
-    public static readonly Brush AccentFace = new SolidColorBrush(Color.FromRgb(0xAE, 0xD5, 0xF2));
-    public static readonly Brush Outline = new SolidColorBrush(Color.FromRgb(0x75, 0x87, 0x9A));
-    static readonly Brush Shadow = new SolidColorBrush(Color.FromRgb(0xAE, 0xBC, 0xCC));
+    public static readonly CornerRadius Radius = new(7);
+    public static readonly Brush WindowSurface = new SolidColorBrush(Color.FromRgb(0xEC, 0xEA, 0xE4));
+    public static readonly Brush TraySurface = new SolidColorBrush(Color.FromRgb(0xDC, 0xD8, 0xCE));
+    public static readonly Brush LetterFace = new SolidColorBrush(Color.FromRgb(0xFD, 0xFC, 0xFA));
+    public static readonly Brush FunctionFace = new SolidColorBrush(Color.FromRgb(0xE8, 0xE5, 0xDE));
+    public static readonly Brush ModifierFace = new SolidColorBrush(Color.FromRgb(0xE0, 0xDD, 0xD5));
+    public static readonly Brush AccentFace = new SolidColorBrush(Color.FromRgb(0xD6, 0xE3, 0xEE));
+    public static readonly Brush EnterFace = new SolidColorBrush(Color.FromRgb(0x2B, 0x57, 0x7C));
+    public static readonly Brush EnterHover = new SolidColorBrush(Color.FromRgb(0x24, 0x4B, 0x6C));
+    public static readonly Brush EnterPressed = new SolidColorBrush(Color.FromRgb(0x1D, 0x3E, 0x5A));
+    public static readonly Brush EnterBorder = new SolidColorBrush(Color.FromRgb(0x22, 0x46, 0x65));
+    public static readonly Brush Outline = new SolidColorBrush(Color.FromRgb(0xB5, 0xB0, 0xA4));
+    public static readonly Brush Shadow = new SolidColorBrush(Color.FromRgb(0xA5, 0xA0, 0x94));
+    public static readonly Brush PrimaryText = new SolidColorBrush(Color.FromRgb(0x23, 0x21, 0x1E));
+    public static readonly Brush SecondaryText = new SolidColorBrush(Color.FromRgb(0x3D, 0x3A, 0x35));
+    public static readonly Brush SlateAccent = new SolidColorBrush(Color.FromRgb(0x2B, 0x57, 0x7C));
+    public static readonly Brush SlateAccentText = new SolidColorBrush(Color.FromRgb(0x1E, 0x3E, 0x5A));
+    public static readonly Brush KeyHover = new SolidColorBrush(Color.FromRgb(0xDC, 0xE5, 0xED));
+    public static readonly Brush KeyFlash = new SolidColorBrush(Color.FromRgb(0xC9, 0xD9, 0xE6));
+    public static readonly Brush KeyHeld = new SolidColorBrush(Color.FromRgb(0xD6, 0xE3, 0xEE));
+    public static readonly Brush HeaderHover = new SolidColorBrush(Color.FromRgb(0xE2, 0xDF, 0xD8));
+    public static readonly Brush MutedDivider = new SolidColorBrush(Color.FromRgb(0xCF, 0xCB, 0xC2));
 
     public static FrameworkElementFactory Raised(FrameworkElementFactory cap, FrameworkElementFactory surface = null,
         CornerRadius? shadowRadius = null, Brush edgeBrush = null)

@@ -11,20 +11,20 @@ partial class KeyboardWindow : Window
 {
     const double StatusRowHeight = 23;
     const double StatusFontSize = 12;
-    static readonly Brush StatusForeground = new SolidColorBrush(Color.FromRgb(0x1C, 0x25, 0x2E));
-    static readonly Brush WindowSurface = new SolidColorBrush(Color.FromRgb(0xE7, 0xED, 0xF3));
-    static readonly Brush KeyFace = SoftKeyPopupDesign.CardSurface;
-    static readonly Brush KeyShadow = new SolidColorBrush(Color.FromRgb(0xB6, 0xC5, 0xD3));
-    static readonly Brush EnterKeyHover = new SolidColorBrush(Color.FromRgb(0x9A, 0xC9, 0xEC));
-    static readonly Brush EnterKeyPressed = new SolidColorBrush(Color.FromRgb(0x8C, 0xBD, 0xE2));
-    static readonly Brush KeyText = new SolidColorBrush(Color.FromRgb(0x15, 0x26, 0x39));
-    static readonly Brush KeyBorder = new SolidColorBrush(Color.FromRgb(0x6F, 0x83, 0x98));
-    static readonly Brush KeyHover = new SolidColorBrush(Color.FromRgb(0xD1, 0xE4, 0xF5));
-    static readonly Brush KeyFlash = SoftKeyPopupDesign.ActionPressed;
-    static readonly Brush KeyHeld = new SolidColorBrush(Color.FromRgb(0xBC, 0xD8, 0xEF));
-    static readonly Brush KeyLocked = SoftKeyPopupDesign.Accent;
-    static readonly Brush KeyActiveBorder = new SolidColorBrush(Color.FromRgb(0x24, 0x5F, 0x92));
-    static readonly Brush AltGrValueColor = new SolidColorBrush(Color.FromRgb(0x0C, 0x55, 0x84));
+    static readonly Brush StatusForeground = SoftKeyKeyDesign.PrimaryText;
+    static readonly Brush WindowSurface = SoftKeyKeyDesign.WindowSurface;
+    static readonly Brush KeyFace = SoftKeyKeyDesign.LetterFace;
+    static readonly Brush KeyShadow = SoftKeyKeyDesign.Shadow;
+    static readonly Brush EnterKeyHover = SoftKeyKeyDesign.EnterHover;
+    static readonly Brush EnterKeyPressed = SoftKeyKeyDesign.EnterPressed;
+    static readonly Brush KeyText = SoftKeyKeyDesign.PrimaryText;
+    static readonly Brush KeyBorder = SoftKeyKeyDesign.Outline;
+    static readonly Brush KeyHover = SoftKeyKeyDesign.KeyHover;
+    static readonly Brush KeyFlash = SoftKeyKeyDesign.KeyFlash;
+    static readonly Brush KeyHeld = SoftKeyKeyDesign.KeyHeld;
+    static readonly Brush KeyLocked = SoftKeyKeyDesign.SlateAccent;
+    static readonly Brush KeyActiveBorder = SoftKeyKeyDesign.SlateAccent;
+    static readonly Brush AltGrValueColor = new SolidColorBrush(Color.FromRgb(0x2A, 0x58, 0x7E));
     static readonly ControlTemplate KeyTemplate = KeyButtonTemplate(raised: true);
 
     readonly Settings cfg;
@@ -260,30 +260,31 @@ partial class KeyboardWindow : Window
         Brush background = style.Background;
         Brush foreground = held.Any(m => m.Label == "AltGr") && KeyboardLayout.IsPrintable(key)
             ? AltGrValueColor : style.Foreground;
-        Brush border = key.Label == "Enter" ? KeyActiveBorder : KeyBorder;
+        Brush border = key.Label == "Enter" ? SoftKeyKeyDesign.EnterBorder : KeyBorder;
         if (held.Contains(key) && lockedModifiers.Contains(key))
         {
             background = KeyLocked;
             foreground = Brushes.White;
-            border = KeyLocked;
+            border = SoftKeyKeyDesign.EnterBorder;
         }
         else if (held.Contains(key) || mouseWin?.IsChordModifierSelected(key) == true)
         {
             background = KeyHeld;
-            foreground = SoftKeyPopupDesign.ActionText;
+            foreground = SoftKeyKeyDesign.SlateAccentText;
             border = KeyActiveBorder;
         }
         else if (flashingKeys.Contains(key))
         {
             background = key.Label == "Enter" ? EnterKeyPressed : KeyFlash;
-            foreground = SoftKeyPopupDesign.ActionText;
-            border = KeyActiveBorder;
+            foreground = key.Label == "Enter" ? Brushes.White : SoftKeyKeyDesign.SlateAccentText;
+            border = key.Label == "Enter" ? SoftKeyKeyDesign.EnterBorder : KeyActiveBorder;
         }
         else if (isHovered)
         {
             background = key.Label == "Enter" ? (isPressed ? EnterKeyPressed : EnterKeyHover)
                 : isPressed ? KeyFlash : KeyHover;
-            border = KeyActiveBorder;
+            foreground = key.Label == "Enter" ? Brushes.White : foreground;
+            border = key.Label == "Enter" ? SoftKeyKeyDesign.EnterBorder : KeyActiveBorder;
         }
         button.Background = background;
         button.Foreground = foreground;
@@ -461,12 +462,12 @@ partial class KeyboardWindow : Window
         if (button.Tag is KeyDef key) { UpdateKeyVisual(key, hovered, pressed); return; }
         if (button.Template == KeyTemplate)
         {
-            button.Background = hovered ? (pressed ? SoftKeyPopupDesign.ActionPressed : KeyHover) : SoftKeyKeyDesign.FunctionFace;
+            button.Background = hovered ? (pressed ? KeyFlash : KeyHover) : SoftKeyKeyDesign.FunctionFace;
             button.BorderBrush = hovered ? KeyActiveBorder : KeyBorder;
             return;
         }
         bool active = button.IsEnabled && button.Content is string word && !string.IsNullOrWhiteSpace(word);
-        button.Background = active && hovered ? (pressed ? SoftKeyPopupDesign.ActionPressed : KeyHover) : Brushes.Transparent;
+        button.Background = active && hovered ? (pressed ? KeyFlash : KeyHover) : Brushes.Transparent;
         button.BorderBrush = Brushes.Transparent;
         button.BorderThickness = new Thickness(0);
     }
@@ -521,7 +522,7 @@ partial class KeyboardWindow : Window
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             modifierStatus = new TextBlock
             {
-                Foreground = SoftKeyPopupDesign.ActionText, FontSize = StatusFontSize,
+                Foreground = SoftKeyKeyDesign.SlateAccent, FontSize = StatusFontSize,
                 FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center
             };
             Grid.SetColumn(modifierStatus, 1);
@@ -530,7 +531,7 @@ partial class KeyboardWindow : Window
         return new Border
         {
             Background = WindowSurface,
-            BorderBrush = SoftKeyPopupDesign.CardBorder,
+            BorderBrush = SoftKeyKeyDesign.Outline,
             BorderThickness = new Thickness(0, 1, 0, 0),
             Padding = new Thickness(8, 0, 6, 0),
             UseLayoutRounding = true,
@@ -702,15 +703,18 @@ partial class KeyboardWindow : Window
         if (k.Label == "Win") button.Content = WindowsLogo();
         else if (k.Label == "Menu") button.Content = MenuKeyIcon();
         else if (k.Label is "←" or "→" or "↑" or "↓") ApplyArrowKeyIcon(button, k.Label);
+        bool printableOrSpace = KeyboardLayout.IsPrintable(k) || k.Label == "Space";
         button.Background = k.Mod || k.Label == "Cap" ? SoftKeyKeyDesign.ModifierFace
-            : KeyboardLayout.IsPrintable(k) || k.Label == "Space" ? KeyFace : SoftKeyKeyDesign.FunctionFace;
+            : printableOrSpace ? KeyFace : SoftKeyKeyDesign.FunctionFace;
+        if (!printableOrSpace && k.Label != "Enter" && k.Fg == null)
+            button.Foreground = SoftKeyKeyDesign.SecondaryText;
         if (button.Content is string { Length: 1 } || k.Label is "Enter" or "Space")
             button.FontWeight = FontWeights.Bold;
         if (k.Label == "Enter")
         {
-            button.Background = SoftKeyKeyDesign.AccentFace;
-            button.Foreground = SoftKeyPopupDesign.ActionText;
-            button.BorderBrush = KeyActiveBorder;
+            button.Background = SoftKeyKeyDesign.EnterFace;
+            button.Foreground = Brushes.White;
+            button.BorderBrush = SoftKeyKeyDesign.EnterBorder;
         }
     }
 

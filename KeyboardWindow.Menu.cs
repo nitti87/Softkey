@@ -15,13 +15,13 @@ partial class KeyboardWindow
     const int WordMenuIndex = 4;
     const int KeyboardMenuIndex = 1;
 
-    static readonly Brush MenuStroke = new SolidColorBrush(Color.FromRgb(0xE2, 0xE2, 0xE2));
-    static readonly Brush MenuPanelStroke = new SolidColorBrush(Color.FromRgb(0xD3, 0xD3, 0xD3));
-    static readonly Brush MenuSeparatorBrush = new SolidColorBrush(Color.FromRgb(0xE6, 0xE6, 0xE6));
-    static readonly Brush MenuHeaderHover = new SolidColorBrush(Color.FromRgb(0xEF, 0xEF, 0xEF));
-    static readonly Brush ActiveMenu = new SolidColorBrush(Color.FromRgb(0xD9, 0xEA, 0xF7));
-    static readonly Brush ActiveMenuBorder = new SolidColorBrush(Color.FromRgb(0x70, 0xA8, 0xD2));
-    static readonly Brush ActiveMenuText = new SolidColorBrush(Color.FromRgb(0x1F, 0x3B, 0x53));
+    static readonly Brush MenuStroke = SoftKeyKeyDesign.Outline;
+    static readonly Brush MenuPanelStroke = new SolidColorBrush(Color.FromRgb(0xD2, 0xCF, 0xC6));
+    static readonly Brush MenuSeparatorBrush = new SolidColorBrush(Color.FromRgb(0xE6, 0xE3, 0xDC));
+    static readonly Brush MenuHeaderHover = SoftKeyKeyDesign.HeaderHover;
+    static readonly Brush ActiveMenu = SoftKeyKeyDesign.KeyHeld;
+    static readonly Brush ActiveMenuBorder = new SolidColorBrush(Color.FromRgb(0x6E, 0x94, 0xB4));
+    static readonly Brush ActiveMenuText = SoftKeyKeyDesign.SlateAccentText;
     static readonly ControlTemplate MenuHeaderTemplate = KeyButtonTemplate(cornerRadius: 4);
     static readonly ControlTemplate MenuActionTemplate = KeyButtonTemplate(HorizontalAlignment.Stretch, cornerRadius: 4);
 
@@ -46,7 +46,7 @@ partial class KeyboardWindow
 
     UIElement TopMenu()
     {
-        menuLayer = new StackPanel { Orientation = Orientation.Horizontal, Background = SoftKeyPopupDesign.TitleBarSurface,
+        menuLayer = new StackPanel { Orientation = Orientation.Horizontal, Background = SoftKeyKeyDesign.WindowSurface,
             Visibility = secureMode ? Visibility.Collapsed : Visibility.Visible };
         menuHeaders[0] = MenuHeader("Arkiv", 0);
         if (!secureMode)
@@ -106,7 +106,7 @@ partial class KeyboardWindow
         var dot = new Border
         {
             Width = 8.5, Height = 8.5, CornerRadius = new CornerRadius(4.25),
-            Background = Accent, BorderThickness = new Thickness(1.5),
+            Background = SoftKeyKeyDesign.SlateAccent, BorderThickness = new Thickness(1.5),
             HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
             Margin = new Thickness(0, -1, -7, 0), IsHitTestVisible = false, SnapsToDevicePixels = true
         };
@@ -144,9 +144,9 @@ partial class KeyboardWindow
         {
             if (menuHeaders[i] == null) continue;
             bool active = i == openMenu;
-            menuHeaders[i].Background = active ? ActiveMenu : SoftKeyPopupDesign.TitleBarSurface;
+            menuHeaders[i].Background = active ? ActiveMenu : SoftKeyKeyDesign.WindowSurface;
             menuHeaders[i].Foreground = !menuLayer.IsEnabled ? SystemColors.GrayTextBrush
-                : active ? ActiveMenuText : Brushes.Black;
+                : active ? ActiveMenuText : SoftKeyKeyDesign.PrimaryText;
             menuHeaders[i].BorderBrush = active ? ActiveMenuBorder : Brushes.Transparent;
         }
         RefreshUpdateIndicator();
@@ -156,8 +156,8 @@ partial class KeyboardWindow
     {
         var button = new Button
         {
-            Content = label, Foreground = Brushes.Black,
-            Background = SoftKeyPopupDesign.TitleBarSurface, BorderBrush = Brushes.Transparent,
+            Content = label, Foreground = SoftKeyKeyDesign.PrimaryText,
+            Background = SoftKeyKeyDesign.WindowSurface, BorderBrush = Brushes.Transparent,
             BorderThickness = new Thickness(1), Padding = new Thickness(8, 3, 8, 3),
             Margin = new Thickness(0), FontSize = 13,
             FontWeight = FontWeights.Normal, Focusable = false, Template = MenuHeaderTemplate
@@ -171,8 +171,8 @@ partial class KeyboardWindow
             else
             {
                 button.Background = KeyboardHeaderHidden ? KeyHover : MenuHeaderHover;
-                button.Foreground = Brushes.Black;
-                button.BorderBrush = KeyboardHeaderHidden ? SoftKeyPopupDesign.CardHoverBorder : MenuStroke;
+                button.Foreground = SoftKeyKeyDesign.PrimaryText;
+                button.BorderBrush = KeyboardHeaderHidden ? ActiveMenuBorder : MenuStroke;
             }
         };
         button.MouseLeave += (_, _) => RefreshTopBar();

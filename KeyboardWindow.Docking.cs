@@ -31,7 +31,7 @@ partial class KeyboardWindow
     {
         menuLayer.HorizontalAlignment = HorizontalAlignment.Left;
         menuLayer.VerticalAlignment = VerticalAlignment.Center;
-        desktopHeaderBand = new Grid { Background = SoftKeyPopupDesign.TitleBarSurface, Children = { menu } };
+        desktopHeaderBand = new Grid { Background = SoftKeyKeyDesign.WindowSurface, Children = { menu } };
         ApplyDesktopMenuLayout(titleVisible: true);
         menuLayer.SizeChanged += (_, e) => { if (e.WidthChanged) UpdateDragKeyHostLocations(); };
         desktopHeaderBand.SizeChanged += (_, e) => { if (e.WidthChanged) UpdateDragKeyHostLocations(); };

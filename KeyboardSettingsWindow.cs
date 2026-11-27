@@ -241,7 +241,7 @@ sealed class KeyboardSettingsWindow : Window
         content.Children.Add(new Viewbox { StretchDirection = StretchDirection.DownOnly, Child = sample, IsEnabled = false });
         return new Border
         {
-            Background = SoftKeyPopupDesign.TitleBarSurface, BorderBrush = SoftKeyPopupDesign.CardBorder,
+            Background = SoftKeyKeyDesign.WindowSurface, BorderBrush = SoftKeyKeyDesign.Outline,
             BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(9),
             Margin = new Thickness(0, 0, 0, 12), Padding = new Thickness(12, 10, 12, 12),
             Child = content, IsHitTestVisible = false

@@ -32,8 +32,8 @@ sealed class DragKeyDockPreview : Border
         body.Children.Add(symbols);
         panelSurface = new Border
         {
-            BorderBrush = SoftKeyPopupDesign.ActionBorder, BorderThickness = new Thickness(1),
-            Background = SoftKeyPopupDesign.WindowSurface, Child = body
+            BorderBrush = SoftKeyKeyDesign.SlateAccent, BorderThickness = new Thickness(1),
+            Background = SoftKeyKeyDesign.WindowSurface, Child = body
         };
         Child = panelSurface;
     }

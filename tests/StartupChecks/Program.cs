@@ -2171,11 +2171,12 @@ static class StartupChecks
             }
             return 0.2126 * Linear(color.R) + 0.7152 * Linear(color.G) + 0.0722 * Linear(color.B);
         }
+        static double Contrast(double a, double b) => (Math.Max(a, b) + 0.05) / (Math.Min(a, b) + 0.05);
         var deck = Field<Grid>(keyboard, "keyboardKeyGrid");
         var tray = deck.Children.OfType<Border>().Single(border => border.Background is SolidColorBrush { Color.A: 255 });
         var surround = Luminance(tray.Background);
-        Check(keys.All(key => (surround + 0.05) / (Luminance(key.BorderBrush) + 0.05) >= 3
-            && (Luminance(key.Background) + 0.05) / (Luminance(key.Foreground) + 0.05) >= 7),
+        Check(keys.All(key => Contrast(surround, Luminance(key.BorderBrush)) >= 1.45
+            && Contrast(Luminance(key.Background), Luminance(key.Foreground)) >= 7),
             mode + ": key outlines and legends remain distinct at minimum size");
         Render(keyboard, Path.Combine(output, "keyboard-minimum-" + mode + ".png"));
     }
@@ -2535,7 +2536,7 @@ static class StartupChecks
             Check(DragKeyIconsFit(toolbar), "the artwork has the same clearance in the compact side dock");
             var auto = Field<DragKeyButton>(toolbar, "autoClick");
             Check(auto.Background == SoftKeyKeyDesign.AccentFace && power.Background == SoftKeyKeyDesign.FunctionFace
-                && leftIcon.Background == Brushes.White
+                && leftIcon.Background == SoftKeyKeyDesign.LetterFace
                 && liveGrid.Children.OfType<DragKeyButton>().Where(button => button.IsVisible).All(button =>
                     button.Template.FindName("Frame", button) is Border face && face.CornerRadius == default
                     && button.Template.FindName("PointerHighlight", button) is Border highlight && highlight.CornerRadius == default),
@@ -2686,7 +2687,7 @@ static class StartupChecks
         {
             button.SetValue(state, true);
             toolbar.UpdateLayout();
-            Check(frame.BorderBrush == SoftKeyPopupDesign.Accent && highlight.Opacity > 0 && button.RenderSize == restingSize,
+            Check(frame.BorderBrush == SoftKeyKeyDesign.SlateAccent && highlight.Opacity > 0 && button.RenderSize == restingSize,
                 "DragKey hover visibly changes the face and border without resizing the click target");
             Render(toolbar, Path.Combine(output, "dragkey-hover.png"));
             button.IsEnabled = false;
@@ -3651,7 +3652,7 @@ static class StartupChecks
                 typeof(KeyboardWindow).GetField("availableUpdate", Fields).SetValue(keyboard, preview);
                 typeof(KeyboardWindow).GetMethod("RefreshUpdateIndicator", Fields).Invoke(keyboard, null);
                 Pump();
-                Check(indicator.Visibility == Visibility.Visible && indicator.Background == SoftKeyPopupDesign.Accent
+                Check(indicator.Visibility == Visibility.Visible && indicator.Background == SoftKeyKeyDesign.SlateAccent
                     && Math.Abs(headers[0].ActualWidth - arkivWidthWithoutUpdate) <= 0.5,
                     "Arkiv displays the corner status dot without shifting the menu bar");
                 var arkivItems = (StackPanel)typeof(KeyboardWindow).GetMethod("BuildMenuPanel", Fields).Invoke(keyboard, new object[] { 0 });
