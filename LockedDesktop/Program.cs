@@ -27,6 +27,7 @@ static class LockedProgram
             Native.AdditionalInputGuard = () => LockSession.IsLocked == true;
             var app = new Application();
             var window = new KeyboardWindow(null, true, LogonSettings.Load(AppContext.BaseDirectory));
+            SoftKeyResilience.Attach(app, "locked", window.RecoverFromTransientError);
             window.Title = "SoftKey – Låsskärm";
             window.SetInputGuard(InputAllowed);
             var display = new KeyboardStartupDisplay(window, () => LogonDiagnostics.Record("locked-keyboard-shown"));

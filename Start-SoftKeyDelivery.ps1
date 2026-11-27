@@ -2,6 +2,7 @@
 param([switch]$Configure, [switch]$Once, [string]$SignToolPath)
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'SoftKey.GitHub.ps1')
 $repo = 'nitti87/Softkey'
 $api = "https://api.github.com/repos/$repo"
 $data = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'SoftKey\Delivery'
@@ -26,29 +27,27 @@ function Get-DeliveryRun([hashtable]$Headers) {
 
 if (-not $Configure -and -not $Once) { throw 'Choose -Configure or -Once.' }
 $null = New-Item -ItemType Directory -Path $data -Force
-if ($Configure) {
-    $tool = (Get-Item -LiteralPath $SignToolPath).FullName
-    $secret = Read-Host -Prompt 'GitHub-token for SoftKey (Actions read and Contents read and write)' -AsSecureString
-    try {
-        if ($secret.Length -eq 0) { throw 'A GitHub token is required.' }
-        $encrypted = ConvertFrom-SecureString $secret
-        $token = ([pscredential]::new('SoftKey', $secret)).GetNetworkCredential().Password
-    } finally { $secret.Dispose() }
-} else {
-    $saved = Get-Content -LiteralPath $configuration -Raw | ConvertFrom-Json
-    $tool = $saved.SignToolPath
-    $secret = ConvertTo-SecureString $saved.Token
-    try { $token = ([pscredential]::new('SoftKey', $secret)).GetNetworkCredential().Password }
-    finally { $secret.Dispose() }
-}
-
-$headers = @{Authorization='Bearer ' + $token; Accept='application/vnd.github+json'; 'X-GitHub-Api-Version'='2022-11-28'}
+$headers = $null
+$run = $null
+$token = $null
 try {
+    if ($Configure) {
+        $tool = (Get-Item -LiteralPath $SignToolPath).FullName
+    } else {
+        $saved = Get-Content -LiteralPath $configuration -Raw | ConvertFrom-Json
+        $tool = $saved.SignToolPath
+        if ($saved.Token) {
+            $secret = ConvertTo-SecureString $saved.Token
+            try { $token = ([pscredential]::new('SoftKey', $secret)).GetNetworkCredential().Password }
+            finally { $secret.Dispose() }
+        }
+    }
+    $headers = Get-SoftKeyGitHubHeaders -Token $token -AllowBrowserSignIn:$Configure
     $repository = Invoke-RestMethod -Uri $api -Headers $headers -UseBasicParsing -MaximumRedirection 0 -TimeoutSec 25
-    if ($repository.full_name -ine $repo -or $repository.private -ne $true) { throw 'SoftKey delivery requires its private GitHub repository.' }
+    if ($repository.full_name -ine $repo) { throw 'SoftKey delivery requires its GitHub repository.' }
     $run = Get-DeliveryRun $headers
     if ($Configure) {
-        Write-DeliveryJson $configuration @{Token=$encrypted; SignToolPath=$tool}
+        Write-DeliveryJson $configuration @{SignToolPath=$tool}
         $action = New-ScheduledTaskAction -Execute $powershell -WorkingDirectory $PSScriptRoot `
             -Argument ('-NoProfile -NonInteractive -ExecutionPolicy RemoteSigned -WindowStyle Hidden -File "{0}" -Once' -f $PSCommandPath)
         $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) `
@@ -68,23 +67,35 @@ try {
     if ($run.run_number -lt 1) { throw 'GitHub returned an invalid build number.' }
     $package = Join-Path $PSScriptRoot "obj\Updates\SoftKey-update-$($run.run_number).zip"
     if (-not (Test-Path -LiteralPath $package)) {
-        $origin = & git -C $PSScriptRoot remote get-url origin
+        $git = Get-SoftKeyGitPath
+        $origin = & $git -C $PSScriptRoot remote get-url origin
         if ($LASTEXITCODE -ne 0 -or $origin -ine "https://github.com/$repo.git") { throw 'Unexpected Git remote for the signing checkout.' }
-        & git -C $PSScriptRoot fetch --quiet origin main
-        if ($LASTEXITCODE -ne 0) { throw 'Could not fetch the tested SoftKey commit.' }
-        $env:SOFTKEY_GITHUB_ACTIONS_TOKEN = $token
+        $previousPrompt = $env:GIT_TERMINAL_PROMPT
+        $previousInteractive = $env:GCM_INTERACTIVE
+        $env:GIT_TERMINAL_PROMPT = '0'
+        $env:GCM_INTERACTIVE = 'false'
+        try {
+            & $git -C $PSScriptRoot -c credential.username=nitti87 -c credential.interactive=false fetch --quiet origin main
+            if ($LASTEXITCODE -ne 0) { throw 'Could not fetch the tested SoftKey commit.' }
+        } finally {
+            $env:GIT_TERMINAL_PROMPT = $previousPrompt
+            $env:GCM_INTERACTIVE = $previousInteractive
+        }
+        $previousActionsToken = $env:SOFTKEY_GITHUB_ACTIONS_TOKEN
+        $env:SOFTKEY_GITHUB_ACTIONS_TOKEN = $headers.Authorization.Substring('Bearer '.Length)
         try { & (Join-Path $PSScriptRoot 'New-SoftKeyUpdatePackage.ps1') -RunId $run.id -SignToolPath $tool -Unattended | Out-Null }
-        finally { Remove-Item Env:\SOFTKEY_GITHUB_ACTIONS_TOKEN -ErrorAction SilentlyContinue }
+        finally { $env:SOFTKEY_GITHUB_ACTIONS_TOKEN = $previousActionsToken }
     }
     . (Join-Path $PSScriptRoot 'SoftKey.UpdateDistribution.ps1')
     $manifest = Read-SoftKeyUpdateArchive -ArchivePath $package -TrustedCertificate (Get-SoftKeyReleaseCertificate)
     if ($manifest.Commit -cne $run.head_sha -or $manifest.BuildNumber -ne $run.run_number) {
         throw 'The signed package does not match the selected successful push.'
     }
-    $env:SOFTKEY_GITHUB_CONTENTS_TOKEN = $token
+    $previousContentsToken = $env:SOFTKEY_GITHUB_CONTENTS_TOKEN
+    $env:SOFTKEY_GITHUB_CONTENTS_TOKEN = $headers.Authorization.Substring('Bearer '.Length)
     try {
         $delivery = & (Join-Path $PSScriptRoot 'Publish-SoftKeyUpdatePackage.ps1') -PackagePath $package -PublishPreview
-    } finally { Remove-Item Env:\SOFTKEY_GITHUB_CONTENTS_TOKEN -ErrorAction SilentlyContinue }
+    } finally { $env:SOFTKEY_GITHUB_CONTENTS_TOKEN = $previousContentsToken }
     if ($delivery.Status -ne 'Preview' -or $delivery.Commit -cne $run.head_sha -or $delivery.BuildNumber -ne $run.run_number) {
         throw 'GitHub did not confirm the selected update.'
     }
@@ -92,4 +103,4 @@ try {
 } catch {
     Write-DeliveryJson $status @{State='Failed'; Build=$run.run_number; Message=$_.Exception.Message; Time=[DateTime]::UtcNow.ToString('o')}
     throw
-} finally { $headers.Clear() }
+} finally { if ($headers) { $headers.Clear() } }

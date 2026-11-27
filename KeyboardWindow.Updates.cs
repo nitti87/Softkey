@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Interop;
 using System.Windows.Threading;
 
 partial class KeyboardWindow
@@ -19,8 +20,8 @@ partial class KeyboardWindow
         updateTimer.Tick += async (_, _) =>
         {
             updateTimer.Interval = TimeSpan.FromHours(1);
-            if (desktopSessionSuspended || !SoftKeyUpdates.HasCredential) return;
-            try { availableUpdate = await CheckForUpdateAsync(); }
+            if (desktopSessionSuspended) return;
+            try { await CheckForUpdateAsync(); }
             catch (Exception ex) { Trace.TraceWarning("SoftKey update check failed ({0}).", ex.GetType().Name); }
         };
         Closed += (_, _) =>
@@ -32,24 +33,32 @@ partial class KeyboardWindow
         updateTimer.Start();
     }
 
-    Task<SoftKeyUpdates.Preview> CheckForUpdateAsync()
+    async Task<SoftKeyUpdates.Preview> CheckForUpdateAsync()
     {
         if (pendingUpdateCheck?.IsCompleted != false)
             pendingUpdateCheck = SoftKeyUpdates.CheckAsync(updateCancellation.Token);
-        return pendingUpdateCheck;
+        var preview = await pendingUpdateCheck;
+        availableUpdate = preview;
+        RefreshUpdateIndicator();
+        updateWindow?.SetAvailable(preview);
+        return preview;
     }
 
     void OpenUpdateSettings()
     {
         if (secureMode || desktopSessionSuspended) return;
-        if (updateWindow != null) { updateWindow.Activate(); return; }
-        updateWindow = new SoftKeyUpdateWindow(availableUpdate, async () => availableUpdate = await CheckForUpdateAsync(), async preview =>
+        if (updateWindow != null) { Native.KeepOnTop(new WindowInteropHelper(updateWindow).Handle); return; }
+        updateWindow = new SoftKeyUpdateWindow(availableUpdate, CheckForUpdateAsync, async (preview, progress) =>
         {
+            string package = await SoftKeyUpdates.DownloadAsync(preview, progress, updateCancellation.Token);
             if (desktopSessionSuspended || !DesktopContext.IsCurrentInputDesktop || !CancelMouseAction() || !ReleaseHeldModifiers() || !SaveSettings())
                 throw new InvalidOperationException("Uppdatera från det aktiva Windows-skrivbordet.");
-            await SoftKeyUpdates.StartInstallAsync(preview);
+            progress.Report(new SoftKeyUpdates.Progress(59, "Väntar på Windows godkännande", "Bekräfta i Windows för att fortsätta installationen."));
+            var dialog = updateWindow;
+            string content = SoftKeyUpdateProgressView.InstallationContent(Math.Max(280, dialog.ActualWidth - 18));
+            await SoftKeyUpdates.StartInstallAsync(preview, package, content, dialog.Left, dialog.Top);
             _ = Dispatcher.BeginInvoke(new Action(CloseForDesktopTransition), DispatcherPriority.ApplicationIdle);
-        }) { Owner = this };
+        }) { Owner = this, Topmost = cfg.AlwaysOnTop };
         updateWindow.Closed += (_, _) => updateWindow = null;
         updateWindow.Show();
     }

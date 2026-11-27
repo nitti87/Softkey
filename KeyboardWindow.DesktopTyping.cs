@@ -85,6 +85,10 @@ partial class KeyboardWindow
                 && focusVersion == version && Native.InputTarget() == target)
                 SetFocusedSuggestionField(actual.Field, actual.EmailPrefix);
         }
+        catch (Exception ex) when (!SoftKeyResilience.IsFatal(ex))
+        {
+            System.Diagnostics.Trace.TraceWarning("SoftKey desktop typing poll skipped ({0}).", ex.GetType().Name);
+        }
         finally { checkingDisplayedWord = false; }
     }
 
@@ -165,6 +169,11 @@ partial class KeyboardWindow
             if (focusedSuggestionField != target || !ReportInputResult(sent)) return;
             emailPrefix = address;
             RefreshWordFeedback();
+        }
+        catch (Exception ex) when (!SoftKeyResilience.IsFatal(ex))
+        {
+            System.Diagnostics.Trace.TraceWarning("SoftKey email insertion failed ({0}).", ex.GetType().Name);
+            if (IsVisible && !desktopSessionSuspended) ReportInputResult(false);
         }
         finally { emailInsertion = null; }
     }

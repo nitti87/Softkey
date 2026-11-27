@@ -1,14 +1,23 @@
 #Requires -Version 5.1
+[CmdletBinding(DefaultParameterSetName = 'GitHub')]
 param(
     [Parameter(Mandatory)][string]$PackagePath,
-    [switch]$PublishPreview
+    [Parameter(ParameterSetName = 'GitHub')][switch]$PublishPreview,
+    [Parameter(ParameterSetName = 'GitHub')][ValidateLength(1, 12000)][string]$ReleaseNotes,
+    [Parameter(Mandatory, ParameterSetName = 'OneDrive')][switch]$ToOneDrive
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'SoftKey.GitHub.ps1')
 . (Join-Path $PSScriptRoot 'SoftKey.UpdateDistribution.ps1')
 
 $certificate = Get-SoftKeyReleaseCertificate
 $package = Get-Item -LiteralPath $PackagePath
+if ($ToOneDrive) {
+    Copy-SoftKeyUpdateToFolder -Source $package.FullName -Destination (Get-SoftKeyOneDriveUpdateFolder) -Certificate $certificate
+    return
+}
+
 $heldFile = [IO.File]::OpenRead($package.FullName)
 try {
     $manifest = Read-SoftKeyUpdateArchive -ArchivePath $package.FullName -TrustedCertificate $certificate
@@ -16,11 +25,11 @@ try {
     $tag = "softkey-preview-$($manifest.BuildNumber)"
     $packageSize = $heldFile.Length
     $hash = (Get-FileHash -InputStream $heldFile -Algorithm SHA256).Hash.ToLowerInvariant()
-    $headers = Get-SoftKeyReleaseHeaders 'GitHub-token (Contents read and write)'
+    $headers = Get-SoftKeyGitHubHeaders -Token $env:SOFTKEY_GITHUB_CONTENTS_TOKEN -AllowBrowserSignIn
     try {
         $repo = Invoke-RestMethod -Uri $softKeyReleaseApi -Headers $headers -UseBasicParsing -MaximumRedirection 0 -TimeoutSec 25
-        if ($repo.full_name -ine $softKeyReleaseRepository -or $repo.private -ne $true) {
-            throw 'SoftKey test packages require the private SoftKey repository.'
+        if ($repo.full_name -ine $softKeyReleaseRepository) {
+            throw 'The release must belong to the SoftKey repository.'
         }
 
         $existingReleases = @(Get-SoftKeyReleases $headers | Where-Object { $_.tag_name -ceq $tag })
@@ -31,7 +40,9 @@ try {
                 tag_name = $tag
                 target_commitish = $manifest.Commit
                 name = "SoftKey test build $($manifest.BuildNumber)"
-                body = "Signed SoftKey update test package for commit $($manifest.Commit)."
+                body = if ($ReleaseNotes) { $ReleaseNotes } else {
+                    'Signerat uppdateringspaket för SoftKey, autostart, låsskärm och Windows-inloggning.'
+                }
                 draft = $true
                 prerelease = $true
                 make_latest = 'false'

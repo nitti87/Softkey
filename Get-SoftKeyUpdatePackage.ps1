@@ -4,9 +4,8 @@ param([Parameter(Mandatory)][ValidateRange(0, [long]::MaxValue)][long]$Installed
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'SoftKey.UpdateDistribution.ps1')
 
-$certificate = Get-SoftKeyReleaseCertificate
-$headers = Get-SoftKeyReleaseHeaders 'GitHub-token (Contents read-only)'
-try {
-    $preview = Receive-SoftKeyPreview $InstalledBuildNumber (Join-Path $PSScriptRoot 'obj\Updates\Received') $headers $certificate
-    if ($preview) { $preview } else { Write-Output 'No newer SoftKey preview is available.' }
-} finally { $headers.Clear() }
+$headers = Get-SoftKeyPublicReleaseHeaders
+$preview = Find-SoftKeyPreview $InstalledBuildNumber $headers
+if ($preview) {
+    Receive-SoftKeyPreview $preview $InstalledBuildNumber (Join-Path $PSScriptRoot 'obj\Updates\Received') $headers (Get-SoftKeyReleaseCertificate)
+} else { Write-Output 'No newer SoftKey preview is available.' }

@@ -4,25 +4,9 @@
 
 Användaren har godkänt den senaste avskalade inloggningsvyn men därefter uttryckligen förtydligat att appen har långt kvar och att **ingen första version ska skapas nu**. Arbetet fortsätter som utveckling. Den framtida privata installeraren behöver fortfarande hantera båda appdelarna, versionshantering, personliga data och övergången från testregistreringarna. Det portabla installationspaketet har ännu inte byggts. Den fungerande installationen och testregistreringarna ska behållas under den fortsatta utvecklingen.
 
-### Framtida automatiska uppdateringar
+### Uppdateringar i en befintlig installation
 
-GitHub Actions bygger och testar varje push till `main`. `New-SoftKeyUpdatePackage.ps1` förbereder ett signerat uppdateringspaket på utvecklingsdatorn för en lyckad körning.
-
-Skriptet kan köras i Windows PowerShell 5.1 eller PowerShell 7 från en utcheckning vars historik innehåller den testade committen. Ange körningens numeriska ID och `-SignToolPath` till en lokal Microsoft-signerad SignTool. Det frågar efter en GitHub-token med läsrättighet till repots Actions och döljer inmatningen. För automatiserad körning kan tokenet anges via miljövariabeln `SOFTKEY_GITHUB_ACTIONS_TOKEN`. Signeringen använder det befintliga lokala certifikatet och dess behörigheter.
-
-Skriptet bygger från ett rent utdrag av den testade committen. Paketet `obj\Updates\SoftKey-update-<nummer>.zip` innehåller de fyra SoftKey-delarna och ett signerat manifest med körningens versionsnummer, commit och SHA-256 för samtliga filer. Paketeringen verifierar arkivet före sparning. En befintlig version ersätts aldrig vid omkörning. För att undvika att äldre uppdateringar används kan verifieraren jämföra versionsnumret med den installerade versionen.
-
-`Publish-SoftKeyUpdatePackage.ps1 -PackagePath <zip>` verifierar paketet, lägger det i ett releaseutkast i det privata repot och provhämtar det. Ange ett GitHub-token med skrivbehörighet till repots Contents när skriptet frågar. Omkörning återanvänder ett utkast med samma commit och paketdigest. Med `-PublishPreview` publiceras en förhandsversion först när GitHub-kopian har hämtats tillbaka och verifierats.
-
-`Get-SoftKeyUpdatePackage.ps1 -InstalledBuildNumber <nummer>` testar hämtning av den senaste publicerade förhandsversionen med ett token som har läsbehörighet till repots Contents. Skriptet accepterar endast högre byggnummer och sparar verifierade paket i `obj\Updates\Received`. Båda skripten verifierar paketet mot SoftKeys betrodda certifikat och körs från Windows PowerShell 5.1 eller PowerShell 7.
-
-`Start-SoftKeyDelivery.ps1 -Configure -SignToolPath <signtool.exe>` kopplar en lokal Windows-uppgift till utvecklingsmappen. Engångskonfigurationen behöver Actions-läsbehörighet och Contents-skrivbehörighet för det privata repot. Tokenet krypteras för Windows-användaren. Uppgiften körs som vanlig användare, tittar efter lyckade pushar till `main` och publicerar paketet efter verifierad provhämtning. För nya paket måste användaren som kör uppgiften ha signeringsbehörighet till det lokala certifikatet. Vid nekad nyckelåtkomst sparar uppgiften ett fel i `%LOCALAPPDATA%\SoftKey\Delivery\status.json`.
-
-Skrivbordsmenyn **Uppdateringar** tar emot ett separat GitHub-token med läsbehörighet till Contents en gång. SoftKey krypterar det för den inloggade Windows-användaren, söker i bakgrunden och verifierar paketet före **Installera och starta om**. Windows godkänner installationen när användaren väljer den. Installationsarbetet använder en verifierad kopia i den skyddade programmappen, byter programfiler i skrivbords- och eventuella inloggningsmappar och återställer tidigare filer vid ett installations- eller startprov som misslyckas. Personfilerna ligger utanför transaktionen. Ett riktigt inloggningsprov med HeadMouse krävs fortfarande vid första utrullningen.
-
-`Update-SoftKey.ps1` är utvecklingsdatorns lokala bygg-, signerings- och installationsverktyg. En framtida installerad app ska i stället kunna kontrollera en publicerad version, hämta ett färdigt signerat paket och kontrollera dess äkthet innan installation. Signeringsnyckeln ska stanna på byggdatorn. Skrivbords- och inloggningsdelarna ska uppdateras samordnat, med bevarade ord/inställningar och möjlighet att återgå till fungerande programfiler.
-
-Automatisk kontroll/hämtning och installation utan administratörsdialog är skilda frågor. Installation i de skyddade programmapparna behöver rätt behörighet. En förinstallerad uppdateringsdel med avgränsade rättigheter är en möjlig lösning för tyst installation, men arkitekturen är inte beslutad. Uppdateringar ska planeras så att de inte avbryter skrivande eller pågående inloggning. Vanliga uppdateringar ska fortsätta bevara datorns avsedda skyddsläge.
+[UPDATES.md](UPDATES.md) beskriver uppdateringsmenyn, lokal testinstallation, publicering av signerade GitHub-paket, verifiering och återställning. Den här sidan beskriver den första installationen av SoftKey och dess Windows-komponenter.
 
 ## Användarens krav
 

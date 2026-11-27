@@ -354,6 +354,53 @@ static class Program
         Call(window, "OutsideClickHook", 0, new IntPtr(0x200), new IntPtr(1));
         Check(true, "managed callback failure is contained before native marshalling");
         Set(window, "mouseActions", originalActions);
+
+        var resilienceType = assembly.GetType("SoftKeyResilience", true);
+        var isFatal = resilienceType.GetMethod("IsFatal", BindingFlags.Static | BindingFlags.NonPublic);
+        Check((bool)isFatal.Invoke(null, new object[] { new OutOfMemoryException() })
+            && (bool)isFatal.Invoke(null, new object[] { new BadImageFormatException() })
+            && (bool)isFatal.Invoke(null, new object[] { new AggregateException(new OutOfMemoryException()) }),
+            "resilience guard treats fatal CLR and aggregate errors as unrecoverable");
+        Check(!(bool)isFatal.Invoke(null, new object[] { new COMException("transient", -2147467259) })
+            && !(bool)isFatal.Invoke(null, new object[] { new InvalidOperationException("transient") })
+            && !(bool)isFatal.Invoke(null, new object[] { new IOException("transient") }),
+            "resilience guard treats transient COM, UI and I/O errors as recoverable");
+
+        long fakeClock = 1_000;
+        var recoveredTypes = new List<string>();
+        var guard = Activator.CreateInstance(resilienceType, BindingFlags.Instance | BindingFlags.NonPublic, null,
+            new object[] { (Action<string>)(name => recoveredTypes.Add(name)), (Func<long>)(() => fakeClock) }, null);
+        var tryRecover = resilienceType.GetMethod("TryRecover", BindingFlags.Instance | BindingFlags.NonPublic);
+        for (int i = 0; i < 5; i++)
+        {
+            Check((bool)tryRecover.Invoke(guard, new object[] { new InvalidOperationException("transient") }),
+                $"resilience guard recovers transient dispatcher error {i + 1} of 5");
+        }
+        Check(!(bool)tryRecover.Invoke(guard, new object[] { new InvalidOperationException("storm") }),
+            "resilience guard lets an unbroken error storm exit so crash recovery can restart cleanly");
+        fakeClock += 10_000;
+        Check((bool)tryRecover.Invoke(guard, new object[] { new COMException("after-window") })
+            && recoveredTypes.Count == 6 && recoveredTypes[^1] == nameof(COMException),
+            "resilience guard resets its error budget after the burst window elapses");
+        int countBeforeFatal = recoveredTypes.Count;
+        Check(!(bool)tryRecover.Invoke(guard, new object[] { new OutOfMemoryException() })
+            && recoveredTypes.Count == countBeforeFatal,
+            "resilience guard refuses recovery on fatal exceptions without invoking recovery callbacks");
+        var throwingGuard = Activator.CreateInstance(resilienceType, BindingFlags.Instance | BindingFlags.NonPublic, null,
+            new object[] { (Action<string>)(_ => throw new InvalidOperationException("callback failed")), (Func<long>)(() => fakeClock) }, null);
+        Check((bool)tryRecover.Invoke(throwingGuard, new object[] { new IOException("io") }),
+            "resilience guard survives a failing recovery callback");
+
+        Set(window, "checkingDisplayedWord", true);
+        Set(window, "emailInsertion", new System.Threading.CancellationTokenSource());
+        Set(window, "openMenu", 1);
+        Call(window, "RecoverFromTransientError");
+        Check(!(bool)Get(window, "checkingDisplayedWord")
+            && Get(window, "emailInsertion") == null
+            && (int)Get(window, "openMenu") == -1
+            && words.Contains("kontrollord"),
+            "transient error recovery resets interaction state without altering personal words");
+
         Set(window, "closeConfirmed", true);
         window.Close();
         foreach (string file in Directory.GetFiles(folder)) File.Delete(file);

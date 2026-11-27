@@ -34,6 +34,7 @@ static class LogonProgram
             var app = new Application();
             Native.RequireActiveDesktop = true;
             var window = new KeyboardWindow(null, true, settings);
+            SoftKeyResilience.Attach(app, "secure", window.RecoverFromTransientError);
             if (!preview)
             {
                 using var process = Process.GetCurrentProcess();

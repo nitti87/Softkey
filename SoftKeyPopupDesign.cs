@@ -105,14 +105,16 @@ static class SoftKeyPopupDesign
 
     public static Border Frame(string title, UIElement body, Action close, Action beginDrag)
     {
-        var closeButton = SoftKeyButtonDesign.Close(close);
-
         var titleBar = new DockPanel
         {
             Height = 40, Background = TitleBarSurface, Margin = new Thickness(7, 1, 7, 0)
         };
-        DockPanel.SetDock(closeButton, Dock.Right);
-        titleBar.Children.Add(closeButton);
+        if (close != null)
+        {
+            var closeButton = SoftKeyButtonDesign.Close(close);
+            DockPanel.SetDock(closeButton, Dock.Right);
+            titleBar.Children.Add(closeButton);
+        }
         titleBar.Children.Add(new TextBlock
         {
             Text = title, FontSize = TitleFontSize, FontWeight = FontWeights.SemiBold,
@@ -121,7 +123,7 @@ static class SoftKeyPopupDesign
         titleBar.MouseLeftButtonDown += (_, e) =>
         {
             if (e.OriginalSource is Button) return;
-            if (e.LeftButton == MouseButtonState.Pressed) beginDrag();
+            if (e.LeftButton == MouseButtonState.Pressed) beginDrag?.Invoke();
         };
 
         var bodySurface = new Border

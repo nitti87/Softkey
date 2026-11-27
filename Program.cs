@@ -37,6 +37,7 @@ static class Program
             DesktopCrashRecovery.StartWatching(recoveryAttempt);
             var app = new Application();
             var window = new KeyboardWindow();
+            SoftKeyResilience.Attach(app, "desktop", window.RecoverFromTransientError);
             window.EnableUpdateChecks();
             window.EnableDesktopSessionTracking(startupReady: () =>
             {

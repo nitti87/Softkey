@@ -4,23 +4,66 @@ Add-Type -AssemblyName System.Net.Http
 $softKeyReleaseRepository = 'nitti87/Softkey'
 $softKeyReleaseApi = "https://api.github.com/repos/$softKeyReleaseRepository"
 
-function Get-SoftKeyReleaseHeaders([string]$Prompt) {
-    $token = $env:SOFTKEY_GITHUB_CONTENTS_TOKEN
-    if (-not $token) {
-        $secret = Read-Host -Prompt $Prompt -AsSecureString
-        try { $token = ([pscredential]::new('SoftKey', $secret)).GetNetworkCredential().Password }
-        finally { $secret.Dispose() }
-    }
-    if (-not $token) { throw 'A GitHub token is required.' }
-    @{
-        Authorization = 'Bearer ' + $token
-        Accept = 'application/vnd.github+json'
-        'X-GitHub-Api-Version' = '2022-11-28'
-    }
+function Get-SoftKeyPublicReleaseHeaders {
+    @{Accept='application/vnd.github+json'; 'X-GitHub-Api-Version'='2022-11-28'}
 }
 
 function Get-SoftKeyReleaseCertificate {
     Get-Item -LiteralPath 'Cert:\LocalMachine\Root\093405919B8DF0EF0F13D124D7DB22FE685979BB' -ErrorAction Stop
+}
+
+function Get-SoftKeyOneDriveUpdateFolder {
+    $root = if ($env:OneDriveConsumer) { $env:OneDriveConsumer } else { $env:OneDrive }
+    if (-not $root -or -not [IO.Directory]::Exists($root)) { throw 'Sign in to OneDrive on this computer first.' }
+    Join-Path $root 'SoftKey\Updates'
+}
+
+function Copy-SoftKeyUpdateToFolder {
+    param([string]$Source, [string]$Destination, $Certificate, [long]$InstalledBuildNumber, [long]$ExpectedBuild)
+
+    $directory = [IO.Directory]::CreateDirectory($Destination)
+    $temporary = Join-Path $directory.FullName ('.softkey-' + [guid]::NewGuid().ToString('N') + '.tmp')
+    try {
+        $package = [IO.File]::OpenRead($Source)
+        try {
+            if ($package.Length -lt 1 -or $package.Length -gt 64MB) { throw 'The update package size is invalid.' }
+            $copy = [IO.File]::Open($temporary, 'CreateNew', 'Write', 'None')
+            try { $package.CopyTo($copy) } finally { $copy.Dispose() }
+        } finally { $package.Dispose() }
+
+        $manifest = Read-SoftKeyUpdateArchive -ArchivePath $temporary -TrustedCertificate $Certificate -InstalledBuildNumber $InstalledBuildNumber
+        if ($ExpectedBuild -gt 0 -and $manifest.BuildNumber -ne $ExpectedBuild) {
+            throw 'The filename does not match the signed build number.'
+        }
+        $path = Join-Path $directory.FullName "SoftKey-update-$($manifest.BuildNumber).zip"
+        try { [IO.File]::Move($temporary, $path) }
+        catch [IO.IOException] {
+            if (-not [IO.File]::Exists($path)) { throw }
+            if ((Get-FileHash -LiteralPath $temporary).Hash -cne (Get-FileHash -LiteralPath $path).Hash) {
+                throw 'The destination contains a different package for the same build.'
+            }
+        }
+        [pscustomobject]@{BuildNumber=$manifest.BuildNumber; Commit=$manifest.Commit; VerifiedDownload=$path}
+    } finally {
+        if ([IO.File]::Exists($temporary)) { [IO.File]::Delete($temporary) }
+    }
+}
+
+function Receive-SoftKeyFolderPreview([long]$InstalledBuildNumber, [string]$Folder, [string]$Cache, $Certificate) {
+    $newestBuild = $InstalledBuildNumber
+    $candidate = $null
+    foreach ($file in [IO.Directory]::EnumerateFiles($Folder, 'SoftKey-update-*.zip')) {
+        $name = [regex]::Match([IO.Path]::GetFileName($file), '^SoftKey-update-([1-9][0-9]*)\.zip$')
+        [long]$build = 0
+        if ($name.Success -and [long]::TryParse($name.Groups[1].Value, [ref]$build) -and $build -gt $newestBuild) {
+            $candidate = $file
+            $newestBuild = $build
+        }
+    }
+    if ($candidate) {
+        Copy-SoftKeyUpdateToFolder -Source $candidate -Destination $Cache -Certificate $Certificate `
+            -InstalledBuildNumber $InstalledBuildNumber -ExpectedBuild $newestBuild
+    }
 }
 
 function Get-SoftKeyReleases([hashtable]$Headers) {
@@ -73,14 +116,20 @@ function Send-SoftKeyReleaseAsset([uri]$Uri, [hashtable]$Headers, [IO.Stream]$Pa
     }
 }
 
-function Copy-SoftKeyReleaseAsset($Asset, [hashtable]$Headers, [IO.Stream]$Destination) {
+function Copy-SoftKeyReleaseAsset($Asset, [hashtable]$Headers, [IO.Stream]$Destination, [scriptblock]$OnBytes) {
+    $uri = if ($Headers.Authorization) {
+        "$softKeyReleaseApi/releases/assets/$($Asset.id)"
+    } else {
+        if ($Asset.name -cnotmatch '^SoftKey-update-([1-9][0-9]*)\.zip$') { throw 'Invalid public update filename.' }
+        "https://github.com/$softKeyReleaseRepository/releases/download/softkey-preview-$($Matches[1])/$($Asset.name)"
+    }
     $handler = [Net.Http.HttpClientHandler]::new()
     $handler.AllowAutoRedirect = $false
     $client = [Net.Http.HttpClient]::new($handler)
     $deadline = [Threading.CancellationTokenSource]::new([TimeSpan]::FromSeconds(90))
-    $request = [Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::Get, "$softKeyReleaseApi/releases/assets/$($Asset.id)")
+    $request = [Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::Get, $uri)
     $request.Headers.Add('User-Agent', 'SoftKey-Updates')
-    $request.Headers.Add('Authorization', $Headers.Authorization)
+    if ($Headers.Authorization) { $request.Headers.Add('Authorization', $Headers.Authorization) }
     $request.Headers.Add('X-GitHub-Api-Version', $Headers['X-GitHub-Api-Version'])
     $request.Headers.Add('Accept', 'application/octet-stream')
     $response = $null
@@ -105,6 +154,7 @@ function Copy-SoftKeyReleaseAsset($Asset, [hashtable]$Headers, [IO.Stream]$Desti
             while (($length = $stream.ReadAsync($buffer, 0, $buffer.Length, $deadline.Token).GetAwaiter().GetResult()) -gt 0) {
                 if ($Destination.Position + $length -gt $Asset.size) { throw 'The download exceeds the GitHub asset size.' }
                 $Destination.Write($buffer, 0, $length)
+                if ($OnBytes) { $null = & $OnBytes $Destination.Position $Asset.size }
             }
         } finally { $stream.Dispose() }
     } finally {
@@ -116,13 +166,15 @@ function Copy-SoftKeyReleaseAsset($Asset, [hashtable]$Headers, [IO.Stream]$Desti
 }
 
 function Save-SoftKeyReleaseAsset {
-    param($Asset, [hashtable]$Headers, [string]$Path, $Certificate, [long]$BuildNumber, [string]$Commit)
+    param($Asset, [hashtable]$Headers, [string]$Path, $Certificate, [long]$BuildNumber, [string]$Commit,
+        [scriptblock]$OnBytes, [scriptblock]$OnVerify)
 
     $temporaryPath = $Path + '.' + [guid]::NewGuid().ToString('N') + '.tmp'
     try {
         $file = [IO.File]::Open($temporaryPath, 'CreateNew', 'Write', 'None')
-        try { Copy-SoftKeyReleaseAsset $Asset $Headers $file } finally { $file.Dispose() }
+        try { $null = Copy-SoftKeyReleaseAsset $Asset $Headers $file $OnBytes } finally { $file.Dispose() }
 
+        if ($OnVerify) { $null = & $OnVerify }
         $digest = (Get-FileHash -LiteralPath $temporaryPath -Algorithm SHA256).Hash
         if ((Get-Item -LiteralPath $temporaryPath).Length -ne $Asset.size -or "sha256:$($digest.ToLowerInvariant())" -cne $Asset.digest) {
             throw 'The download does not match the GitHub asset digest or size.'
@@ -142,8 +194,9 @@ function Save-SoftKeyReleaseAsset {
     }
 }
 
-function Receive-SoftKeyPreview([long]$InstalledBuildNumber, [string]$Cache, [hashtable]$Headers, $Certificate) {
+function Find-SoftKeyPreview([long]$InstalledBuildNumber, [hashtable]$Headers) {
     $candidate = $null
+    $asset = $null
     $newestBuild = $InstalledBuildNumber
     foreach ($release in Get-SoftKeyReleases $Headers) {
         if ($release.draft -ne $false -or $release.prerelease -ne $true -or
@@ -151,25 +204,58 @@ function Receive-SoftKeyPreview([long]$InstalledBuildNumber, [string]$Cache, [ha
         $tag = [regex]::Match($release.tag_name, '^softkey-preview-([1-9][0-9]*)$')
         [long]$build = 0
         if ($tag.Success -and [long]::TryParse($tag.Groups[1].Value, [ref]$build) -and $build -gt $newestBuild) {
+            $releaseAsset = Get-SoftKeyReleaseAsset $release $build
+            if (-not $releaseAsset) { continue }
             $newestBuild = $build
             $candidate = $release
+            $asset = $releaseAsset
         }
     }
     if (-not $candidate) { return }
-    $asset = Get-SoftKeyReleaseAsset $candidate $newestBuild
-    if (-not $asset) { throw 'The newest SoftKey preview is missing its update asset.' }
+    $notes = [string]$candidate.body
+    if ($notes.Length -gt 12000) { $notes = $notes.Substring(0, 12000) }
+    [pscustomobject]@{
+        BuildNumber = $newestBuild
+        Commit = $candidate.target_commitish
+        Notes = $notes
+        Published = [string]$candidate.published_at
+        Asset = [pscustomobject]@{Id=$asset.id; Name=$asset.name; State=$asset.state; Size=$asset.size; Digest=$asset.digest}
+    }
+}
+
+function Receive-SoftKeyPreview {
+    param($Preview, [long]$InstalledBuildNumber, [string]$Cache, [hashtable]$Headers, $Certificate,
+        [scriptblock]$OnBytes, [scriptblock]$OnVerify)
+
+    [long]$build = $Preview.BuildNumber
+    if ($build -le $InstalledBuildNumber -or $Preview.Commit -cnotmatch '^[0-9a-f]{40}$') {
+        throw 'The selected update build is invalid or already installed.'
+    }
+    $asset = Get-SoftKeyReleaseAsset @{assets=@($Preview.Asset)} $build
+    if (-not $asset) { throw 'The selected SoftKey update is missing its archive.' }
 
     $directory = (New-Item -ItemType Directory -Path $Cache -Force).FullName
-    $path = Join-Path $directory $asset.name
-    if ([IO.File]::Exists($path) -and (Get-Item -LiteralPath $path).Length -eq $asset.size -and
-        ('sha256:' + (Get-FileHash -LiteralPath $path).Hash.ToLowerInvariant()) -ceq $asset.digest) {
-        $manifest = Read-SoftKeyUpdateArchive -ArchivePath $path -TrustedCertificate $Certificate -InstalledBuildNumber $InstalledBuildNumber
-        if ($manifest.BuildNumber -ne $newestBuild -or $manifest.Commit -cne $candidate.target_commitish) {
-            throw 'The verified cache does not match the selected GitHub release.'
+    foreach ($root in @((Split-Path -Parent $directory), $directory)) {
+        if ((Get-Item -LiteralPath $root -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) {
+            throw 'The update cache cannot be a link.'
         }
+    }
+    $path = Join-Path $directory $asset.name
+    if ([IO.File]::Exists($path)) {
+        $cached = Get-Item -LiteralPath $path -Force
+        if ($cached.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'The update cache contains a link.' }
+        if ($cached.Length -ne $asset.size -or ('sha256:' + (Get-FileHash -LiteralPath $path).Hash.ToLowerInvariant()) -cne $asset.digest) {
+            # A partial or corrupted cache entry must not prevent a fresh download.
+            [IO.File]::Delete($path)
+        }
+    }
+    if ([IO.File]::Exists($path)) {
+        if ($OnVerify) { $null = & $OnVerify }
+        $manifest = Read-SoftKeyUpdateArchive -ArchivePath $path -TrustedCertificate $Certificate -InstalledBuildNumber $InstalledBuildNumber
+        if ($manifest.BuildNumber -ne $build -or $manifest.Commit -cne $Preview.Commit) { throw 'The verified cache has a different build identity.' }
     } else {
-        $manifest = Save-SoftKeyReleaseAsset -Asset $asset -Headers $Headers -Path $path `
-            -Certificate $Certificate -BuildNumber $newestBuild -Commit $candidate.target_commitish
+        $manifest = Save-SoftKeyReleaseAsset -Asset $asset -Headers $Headers -Path $path -Certificate $Certificate `
+            -BuildNumber $build -Commit $Preview.Commit -OnBytes $OnBytes -OnVerify $OnVerify
     }
     [pscustomobject]@{BuildNumber=$manifest.BuildNumber; Commit=$manifest.Commit; VerifiedDownload=$path}
 }

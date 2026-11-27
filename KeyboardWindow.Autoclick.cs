@@ -263,4 +263,15 @@ partial class KeyboardWindow
             && Native.NeedsTopmostRaise(menuSource.Handle, belowMenu))
             Native.KeepOnTop(menuSource.Handle);
     }
+
+    internal void RecoverFromTransientError()
+    {
+        desktopDwellTargets?.Leave();
+        dwellTracker.Reset();
+        mouseWin?.ResetDwellPreview();
+        if (mouseActions.IsWindowDragging) CancelMouseAction();
+        if (openMenu >= 0) CloseMenu();
+        checkingDisplayedWord = false;
+        emailInsertion = null;
+    }
 }

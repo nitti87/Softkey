@@ -4,6 +4,9 @@ if ($PSVersionTable.PSEdition -eq 'Desktop') {
     Add-Type -AssemblyName System.Security.Cryptography.Pkcs
 }
 Add-Type -AssemblyName System.IO.Compression
+# The embedded workers start PowerShell without a profile, so the Cert: drive
+# is not necessarily registered by the time they verify the publisher.
+Import-Module (Join-Path $PSHOME 'Modules\Microsoft.PowerShell.Security\Microsoft.PowerShell.Security.psd1')
 
 function Get-SoftKeyUpdateFiles {
     foreach ($component in 'SoftKey', 'SoftKey.Logon', 'SoftKey.Locked', 'SoftKey.Startup') {

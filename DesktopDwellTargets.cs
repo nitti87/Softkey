@@ -94,14 +94,27 @@ sealed class DesktopDwellTargets
     {
         // UI Automation providers can call back into an application's UI thread.
         // Run the whole native query on an MTA worker and return only value data.
-        var sample = await Task.Run(() => FindExternal(point, handle)).ConfigureAwait(false);
-        if (dispatcher.HasShutdownStarted) return;
-        _ = dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() =>
+        Sample? sample = null;
+        try
         {
-            pending = false;
-            if (sample.HasValue && requestVisit == visit && !useWindowOnly)
-                receive(sample.Value, action, version);
-        }));
+            sample = await Task.Run(() => FindExternal(point, handle)).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (!SoftKeyResilience.IsFatal(ex))
+        {
+            System.Diagnostics.Trace.TraceWarning("SoftKey dwell target query skipped ({0}).", ex.GetType().Name);
+        }
+        finally
+        {
+            if (!dispatcher.HasShutdownStarted)
+            {
+                _ = dispatcher.BeginInvoke(DispatcherPriority.Input, new Action(() =>
+                {
+                    pending = false;
+                    if (sample.HasValue && requestVisit == visit && !useWindowOnly)
+                        receive(sample.Value, action, version);
+                }));
+            }
+        }
     }
 
     internal static Sample? FindExternal(Native.POINT point, IntPtr handle)

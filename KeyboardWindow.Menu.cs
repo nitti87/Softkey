@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
@@ -30,6 +31,7 @@ partial class KeyboardWindow
     StackPanel menuLayer;
     Border wordMenuAnchor;
     Border menuPanel;
+    Border updateIndicator;
     Popup menuPopup;
     int openMenu = -1;
     IntPtr outsideClickHook;
@@ -47,6 +49,16 @@ partial class KeyboardWindow
         menuLayer = new StackPanel { Orientation = Orientation.Horizontal, Background = SoftKeyPopupDesign.TitleBarSurface,
             Visibility = secureMode ? Visibility.Collapsed : Visibility.Visible };
         menuHeaders[0] = MenuHeader("Arkiv", 0);
+        if (!secureMode)
+        {
+            updateIndicator = CreateUpdateBadge(size: 17, margin: new Thickness(6, 0, 0, 0));
+            menuHeaders[0].Content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Children = { new TextBlock { Text = "Arkiv", VerticalAlignment = VerticalAlignment.Center }, updateIndicator }
+            };
+            RefreshUpdateIndicator();
+        }
         menuHeaders[1] = MenuHeader("Tangentbord", 1);
         menuHeaders[2] = MenuHeader("Visa", 2);
         menuHeaders[3] = MenuHeader("Mus", 3);
@@ -84,6 +96,29 @@ partial class KeyboardWindow
 
         RefreshTopBar();
         return menuLayer;
+    }
+
+    static Border CreateUpdateBadge(double size, Thickness margin) => new()
+    {
+        Width = size, Height = size, Margin = margin, CornerRadius = new CornerRadius(size / 2),
+        Background = Accent, VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false,
+        Child = new System.Windows.Shapes.Path
+        {
+            Data = Geometry.Parse("M 2,5.5 L 5.5,2 L 9,5.5 M 5.5,2 L 5.5,9.5"),
+            Stroke = Brushes.White, StrokeThickness = 1.6, StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round, StrokeLineJoin = PenLineJoin.Round,
+            Width = 11, Height = 11.5, Stretch = Stretch.Uniform,
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center
+        }
+    };
+
+    void RefreshUpdateIndicator()
+    {
+        if (updateIndicator == null) return;
+        bool available = availableUpdate != null;
+        updateIndicator.Visibility = available ? Visibility.Visible : Visibility.Collapsed;
+        menuHeaders[0].ToolTip = available ? "En SoftKey-uppdatering är tillgänglig" : null;
+        AutomationProperties.SetName(menuHeaders[0], available ? "Arkiv, uppdatering tillgänglig" : "Arkiv");
     }
 
     void RefreshTopBar()
@@ -194,7 +229,21 @@ partial class KeyboardWindow
         var items = new StackPanel();
         if (index == 0)
         {
-            items.Children.Add(MenuAction(availableUpdate == null ? "Uppdateringar…" : "Uppdatering tillgänglig…", OpenUpdateSettings));
+            var updateItem = MenuAction("Uppdatering…", OpenUpdateSettings);
+            if (availableUpdate != null)
+            {
+                updateItem.Content = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Children =
+                    {
+                        new TextBlock { Text = "Uppdatering…", VerticalAlignment = VerticalAlignment.Center },
+                        CreateUpdateBadge(size: 16, margin: new Thickness(8, 0, 0, 0))
+                    }
+                };
+                AutomationProperties.SetName(updateItem, "Uppdatering…, ny uppdatering tillgänglig");
+            }
+            items.Children.Add(updateItem);
             items.Children.Add(MenuAction("Startup…", OpenStartupSettings));
             items.Children.Add(MenuSeparator());
             items.Children.Add(MenuAction("Avsluta", Close));
@@ -344,6 +393,7 @@ partial class KeyboardWindow
             || IsPointInside(startupWin, screen)
             || IsPointInside(keyboardSettingsWin, screen)
             || IsPointInside(dragKeySettingsWin, screen)
+            || IsPointInside(updateWindow, screen)
             || (openMenu >= 0 && IsPointInside(menuPanel, screen));
     }
 

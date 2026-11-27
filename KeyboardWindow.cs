@@ -619,7 +619,7 @@ partial class KeyboardWindow : Window
         modifierStatus.Text = string.Join("  ·  ", active);
     }
 
-    Window UtilityDialog => (Window)startupWin ?? (Window)wordListWin ?? (Window)mouseWin
+    Window UtilityDialog => (Window)updateWindow ?? (Window)startupWin ?? (Window)wordListWin ?? (Window)mouseWin
         ?? (Window)keyboardSettingsWin ?? (Window)dragKeySettingsWin ?? (Window)passwordPicker ?? phoneNumberWindow;
 
     bool ConfirmClose(Window owner)

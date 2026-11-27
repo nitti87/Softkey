@@ -1,5 +1,7 @@
 # The desktop app embeds this worker. It receives only the signed archive and the
 # exact running desktop process to wait for. All installation paths are fixed.
+param($display)
+
 $ErrorActionPreference = 'Stop'
 $principal = [Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent())
 if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw 'Administrator approval is required.' }
@@ -75,6 +77,7 @@ $replaced = [Collections.Generic.List[object]]::new()
 $completed = $false
 $retainRecovery = $false
 try {
+    Show-SoftKeyInstallStep $display 62 'Verifierar uppdateringen' "SoftKey-update-$($updateParameters.BuildNumber).zip"
     [long]$installedBuild = $updateParameters.InstalledBuild
     if (Test-Path -LiteralPath $installedVersionPath) {
         Assert-LocalPath $installedVersionPath
@@ -96,8 +99,11 @@ try {
         try { $sourcePackage.CopyTo($copy) } finally { $copy.Dispose() }
     } finally { $sourcePackage.Dispose() }
     $manifest = Read-SoftKeyUpdateArchive -ArchivePath $archivePath -TrustedCertificate $certificate -InstalledBuildNumber $installedBuild
-    if ($manifest.BuildNumber -ne $updateParameters.BuildNumber) { throw 'The package build number changed.' }
+    if ($manifest.BuildNumber -ne $updateParameters.BuildNumber -or $manifest.Commit -cne $updateParameters.Commit) {
+        throw 'The selected update package changed.'
+    }
 
+    Show-SoftKeyInstallStep $display 65 'Förbereder programfilerna' 'Kontrollerar SoftKeys signerade programdelar.'
     $files = [Collections.Generic.List[object]]::new()
     $archiveFile = [IO.File]::OpenRead($archivePath)
     try {
@@ -128,6 +134,7 @@ try {
         } finally { $zip.Dispose() }
     } finally { $archiveFile.Dispose() }
 
+    Show-SoftKeyInstallStep $display 70 'Förbereder installationen' 'Väntar på att SoftKey stängs.'
     if ($oldDesktop -and -not $oldDesktop.WaitForExit(20000)) { throw 'The desktop keyboard did not close for the update.' }
     $brokerPath = Join-Path $main 'SoftKey.Startup.exe'
     foreach ($task in @(Get-ScheduledTask -TaskName 'SoftKey-LoginBroker-*' -ErrorAction SilentlyContinue | Where-Object State -eq 'Running')) {
@@ -145,9 +152,12 @@ try {
         Start-Sleep -Milliseconds 150
     }
     foreach ($file in $files) {
+        $number = $replaced.Count + 1
+        Show-SoftKeyInstallStep $display (72 + 21 * $number / $files.Count) 'Installerar programfiler' "$($file.Name)  ·  $number av $($files.Count)"
         [IO.File]::Replace($file.Next, $file.Destination, $file.Backup)
         $replaced.Add($file)
     }
+    Show-SoftKeyInstallStep $display 94 'Kontrollerar installationen' 'Verifierar programfilerna och provar programstarten.'
     foreach ($file in $files) {
         if ((Get-FileHash -LiteralPath $file.Destination).Hash -cne $file.Hash) { throw 'An installed update file changed.' }
         if ($file.Name -match '\.(exe|dll)$') { Assert-UpdateSignature $file.Destination }
@@ -170,6 +180,9 @@ try {
     $completed = $true
 } catch {
     $failure = $_
+    if ($replaced.Count -gt 0) {
+        Show-SoftKeyInstallStep $display $display.State.Snapshot.Percent 'Återställer tidigare programfiler' 'Uppdateringen kunde inte slutföras.'
+    }
     for ($index = $replaced.Count - 1; $index -ge 0; $index--) {
         $file = $replaced[$index]
         try { [IO.File]::Replace($file.Backup, $file.Destination, [NullString]::Value) }

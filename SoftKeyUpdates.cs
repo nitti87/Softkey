@@ -6,7 +6,6 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Reflection;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -14,101 +13,107 @@ using System.Threading.Tasks;
 
 static class SoftKeyUpdates
 {
-    internal sealed record Preview(long BuildNumber, string Commit, string VerifiedDownload);
+    internal sealed record Asset(long Id, string Name, string State, long Size, string Digest);
+    internal sealed record Preview(long BuildNumber, string Commit, string Published, string Notes, Asset Asset);
+    internal sealed record Progress(double Percent, string Status, string Detail);
+    sealed record VerifiedPackage(long BuildNumber, string Commit, string VerifiedDownload);
+
     static readonly string Cache = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SoftKey", "Updates");
-    static readonly string Credential = Path.Combine(Cache, "github-token.dpapi");
     static readonly string PowerShell = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell", "v1.0", "powershell.exe");
     static readonly UTF8Encoding Utf8 = new(false, true);
+    static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     public static long BuildNumber => long.TryParse(typeof(SoftKeyUpdates).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
         .FirstOrDefault(x => x.Key == "SoftKeyUpdateBuild")?.Value, NumberStyles.None, CultureInfo.InvariantCulture, out var build) ? build : 0;
 
+    internal static long CurrentBuildNumber
+    {
+        get
+        {
+            try { return InstalledBuild(); }
+            catch (IOException) { return BuildNumber; }
+        }
+    }
+
     public static bool CanInstall => string.Equals(AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar),
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "SoftKey-UIAccess-Test"), StringComparison.OrdinalIgnoreCase);
 
-    public static bool HasCredential => File.Exists(Credential);
-
-    public static void SetCredential(string token)
+    static long InstalledBuild()
     {
-        if (string.IsNullOrWhiteSpace(token) || token.Length > 1024 || token.Any(c => c <= 32 || c >= 127))
-            throw new ArgumentException("Klistra in ett GitHub-token med läsbehörighet till Contents.");
-        Directory.CreateDirectory(Cache);
-        var plain = Utf8.GetBytes(token);
-        try
-        {
-            var encoded = ProtectedData.Protect(plain, null, DataProtectionScope.CurrentUser);
-            var temporary = Path.Combine(Cache, Guid.NewGuid().ToString("N") + ".tmp");
-            try { File.WriteAllBytes(temporary, encoded); File.Move(temporary, Credential, overwrite: true); }
-            finally { File.Delete(temporary); }
-        }
-        finally { CryptographicOperations.ZeroMemory(plain); }
+        string path = Path.Combine(AppContext.BaseDirectory, "installed-update-build.txt");
+        if (!CanInstall || !File.Exists(path)) return BuildNumber;
+        if (new FileInfo(path).Length > 32 || !long.TryParse(File.ReadAllText(path).Trim(),
+            NumberStyles.None, CultureInfo.InvariantCulture, out long installed))
+            throw new IOException("Det installerade versionsnumret kunde inte läsas.");
+        return Math.Max(BuildNumber, installed);
     }
-
-    public static void ForgetCredential() => File.Delete(Credential);
 
     public static async Task<Preview> CheckAsync(CancellationToken cancel)
     {
-        if ((new FileInfo(Credential)).Length > 8192) throw new IOException("GitHub-tokenet kunde inte läsas.");
-        byte[] token = ProtectedData.Unprotect(File.ReadAllBytes(Credential), null, DataProtectionScope.CurrentUser);
-        try
-        {
-            string command = Parameters(new { BuildNumber, Cache }) + Resource("SoftKey.UpdatePackage.ps1")
-                + Resource("SoftKey.UpdateDistribution.ps1").Replace(". (Join-Path $PSScriptRoot 'SoftKey.UpdatePackage.ps1')", "", StringComparison.Ordinal)
-                + """
+        long installedBuild = InstalledBuild();
+        string command = Parameters(new { BuildNumber = installedBuild }) + DistributionScript() + """
 
-                $headers = @{
-                    Authorization = 'Bearer ' + [Console]::ReadLine()
-                    Accept = 'application/vnd.github+json'
-                    'X-GitHub-Api-Version' = '2022-11-28'
-                }
-                try {
-                    $preview = Receive-SoftKeyPreview $updateParameters.BuildNumber $updateParameters.Cache $headers (Get-SoftKeyReleaseCertificate)
-                    if ($preview) { $preview | ConvertTo-Json -Compress }
-                } finally { $headers.Clear() }
-                """;
-            var start = StartInfo(command);
-            start.RedirectStandardInput = start.RedirectStandardOutput = start.RedirectStandardError = true;
-            using var process = Process.Start(start) ?? throw new IOException("Kunde inte starta uppdateringskontrollen.");
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancel);
-            timeout.CancelAfter(TimeSpan.FromMinutes(3));
-            var output = process.StandardOutput.ReadToEndAsync(timeout.Token);
-            var error = process.StandardError.ReadToEndAsync(timeout.Token);
-            try
-            {
-                await process.StandardInput.BaseStream.WriteAsync(token, timeout.Token);
-                await process.StandardInput.BaseStream.WriteAsync(new byte[] { (byte)'\n' }, timeout.Token);
-                process.StandardInput.Close();
-                await process.WaitForExitAsync(timeout.Token);
-                string json = await output;
-                string diagnostics = await error;
-                if (process.ExitCode != 0)
-                {
-                    string message = diagnostics.Contains("(401)", StringComparison.Ordinal) || diagnostics.Contains("(403)", StringComparison.Ordinal)
-                        || diagnostics.Contains("(404)", StringComparison.Ordinal)
-                        ? "GitHub nekade åtkomst. Kontrollera tokenets läsbehörighet till SoftKey."
-                        : "Uppdateringen kunde inte hämtas eller verifieras. Försök igen.";
-                    throw new IOException(message);
-                }
-                if (string.IsNullOrWhiteSpace(json)) return null;
-                var preview = JsonSerializer.Deserialize<Preview>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                if (preview == null || preview.BuildNumber <= BuildNumber || preview.VerifiedDownload != Path.Combine(Cache, $"SoftKey-update-{preview.BuildNumber}.zip"))
-                    throw new IOException("Uppdateringspaketets identitet kunde inte bekräftas.");
-                return preview;
-            }
-            catch (OperationCanceledException)
-            {
-                try { if (!process.HasExited) process.Kill(entireProcessTree: true); }
-                catch (InvalidOperationException) { }
-                throw;
-            }
-        }
-        finally { CryptographicOperations.ZeroMemory(token); }
+            $preview = Find-SoftKeyPreview $updateParameters.BuildNumber (Get-SoftKeyPublicReleaseHeaders)
+            if ($preview) { $preview | ConvertTo-Json -Compress -Depth 4 }
+            """;
+        string json = await RunWorkerAsync(command, "Det gick inte att söka efter uppdateringar. Försök igen.", cancel);
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        var preview = JsonSerializer.Deserialize<Preview>(json, JsonOptions);
+        if (preview?.Asset == null || preview.BuildNumber <= installedBuild || preview.Asset.Name != PackageName(preview.BuildNumber))
+            throw new IOException("Uppdateringens identitet kunde inte bekräftas.");
+        return preview;
     }
 
-    public static async Task StartInstallAsync(Preview preview)
+    public static async Task<string> DownloadAsync(Preview preview, IProgress<Progress> progress, CancellationToken cancel)
     {
-        if (!CanInstall || preview.BuildNumber <= BuildNumber)
+        long installedBuild = InstalledBuild();
+        if (!CanInstall || preview.BuildNumber <= installedBuild)
             throw new InvalidOperationException("Använd den installerade versionen av SoftKey för att uppdatera.");
+
+        string file = PackageName(preview.BuildNumber);
+        progress.Report(new Progress(0, "Hämtar uppdateringen", file));
+        string command = Parameters(new { BuildNumber = installedBuild, Cache, Preview = preview }) + DistributionScript() + """
+
+            $display = @{Percent=-1}
+            $result = Receive-SoftKeyPreview -Preview $updateParameters.Preview -InstalledBuildNumber $updateParameters.BuildNumber `
+                -Cache $updateParameters.Cache -Headers (Get-SoftKeyPublicReleaseHeaders) -Certificate (Get-SoftKeyReleaseCertificate) `
+                -OnBytes {
+                    param($received, $total)
+                    $percent = [int][Math]::Floor(55.0 * $received / $total)
+                    if ($percent -gt $display.Percent) {
+                        $display.Percent = $percent
+                        [Console]::WriteLine('bytes:' + $received)
+                    }
+                } -OnVerify { [Console]::WriteLine('verify') }
+            $result | ConvertTo-Json -Compress
+            """;
+        string json = await RunWorkerAsync(command, "Uppdateringen kunde inte hämtas eller verifieras. Försök igen.", cancel, line =>
+        {
+            if (line == "verify")
+            {
+                progress.Report(new Progress(56, "Verifierar paketets signatur", file));
+            }
+            else if (long.TryParse(line.AsSpan("bytes:".Length), NumberStyles.None, CultureInfo.InvariantCulture, out long bytes)
+                && bytes >= 0 && bytes <= preview.Asset.Size)
+            {
+                progress.Report(new Progress(55.0 * bytes / preview.Asset.Size, "Hämtar uppdateringen",
+                    $"{file}  ·  {FormatSize(bytes)} av {FormatSize(preview.Asset.Size)}"));
+            }
+        });
+        var package = JsonSerializer.Deserialize<VerifiedPackage>(json, JsonOptions);
+        if (package == null || package.BuildNumber != preview.BuildNumber || package.Commit != preview.Commit ||
+            !string.Equals(package.VerifiedDownload, Path.Combine(Cache, file), StringComparison.OrdinalIgnoreCase))
+            throw new IOException("Det hämtade paketets identitet kunde inte bekräftas.");
+        return package.VerifiedDownload;
+    }
+
+    public static async Task StartInstallAsync(Preview preview, string packagePath, string progressContent, double left, double top)
+    {
+        long installedBuild = InstalledBuild();
+        if (!CanInstall || preview.BuildNumber <= installedBuild ||
+            !string.Equals(packagePath, Path.Combine(Cache, PackageName(preview.BuildNumber)), StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Använd den installerade versionen av SoftKey för att uppdatera.");
+
         await Task.Run(() =>
         {
             string root = AppContext.BaseDirectory;
@@ -119,9 +124,11 @@ static class SoftKeyUpdates
             using var desktop = Process.GetCurrentProcess();
             string command = Parameters(new
             {
-                PackagePath = preview.VerifiedDownload, preview.BuildNumber, InstalledBuild = BuildNumber,
-                DesktopProcess = desktop.Id, DesktopStarted = desktop.StartTime.ToUniversalTime().Ticks
-            }) + Resource("SoftKey.UpdatePackage.ps1") + Resource("SoftKey.ApplyUpdate.ps1");
+                PackagePath = packagePath, preview.BuildNumber, preview.Commit, InstalledBuild = installedBuild,
+                DesktopProcess = desktop.Id, DesktopStarted = desktop.StartTime.ToUniversalTime().Ticks,
+                ProgressContent = progressContent, Left = left, Top = top
+            }) + Resource("SoftKey.UpdatePackage.ps1") + Resource("SoftKey.InstallProgress.ps1")
+               + "\nInvoke-SoftKeyInstallWithProgress {\n" + Resource("SoftKey.ApplyUpdate.ps1") + "\n}\n";
             var start = StartInfo(command);
             start.UseShellExecute = true;
             start.Verb = "runas";
@@ -141,6 +148,45 @@ static class SoftKeyUpdates
         });
     }
 
+    static async Task<string> RunWorkerAsync(string command, string errorMessage, CancellationToken cancel, Action<string> onProgress = null)
+    {
+        var start = StartInfo(command);
+        start.RedirectStandardOutput = start.RedirectStandardError = true;
+        start.StandardOutputEncoding = Utf8;
+        using var process = Process.Start(start) ?? throw new IOException(errorMessage);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancel);
+        timeout.CancelAfter(TimeSpan.FromMinutes(3));
+        var error = process.StandardError.ReadToEndAsync(timeout.Token);
+        try
+        {
+            string json = "";
+            while (await process.StandardOutput.ReadLineAsync(timeout.Token) is string line)
+            {
+                if (onProgress != null && (line == "verify" || line.StartsWith("bytes:", StringComparison.Ordinal))) onProgress(line);
+                else if (!string.IsNullOrWhiteSpace(line)) json = line;
+            }
+            await process.WaitForExitAsync(timeout.Token);
+            _ = await error;
+            if (process.ExitCode != 0) throw new IOException(errorMessage);
+            return json;
+        }
+        catch (OperationCanceledException)
+        {
+            try { if (!process.HasExited) process.Kill(entireProcessTree: true); }
+            catch (Exception ex) when (ex is InvalidOperationException or Win32Exception) { }
+            throw;
+        }
+    }
+
+    static string PackageName(long build) => FormattableString.Invariant($"SoftKey-update-{build}.zip");
+
+    internal static string FormatSize(long bytes) => bytes >= 1024 * 1024
+        ? $"{bytes / (1024.0 * 1024):0.0} MB"
+        : $"{bytes / 1024.0:0.#} kB";
+
+    static string DistributionScript() => Resource("SoftKey.UpdatePackage.ps1") +
+        Resource("SoftKey.UpdateDistribution.ps1").Replace(". (Join-Path $PSScriptRoot 'SoftKey.UpdatePackage.ps1')", "", StringComparison.Ordinal);
+
     static string Resource(string name)
     {
         using var source = typeof(SoftKeyUpdates).Assembly.GetManifestResourceStream("SoftKey." + name)
@@ -152,7 +198,8 @@ static class SoftKeyUpdates
     static string Parameters(object data)
     {
         string json = Convert.ToBase64String(JsonSerializer.SerializeToUtf8Bytes(data));
-        return "$ErrorActionPreference='Stop'; $updateParameters=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('"
+        return "$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); "
+            + "$updateParameters=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('"
             + json + "')) | ConvertFrom-Json;\n";
     }
 

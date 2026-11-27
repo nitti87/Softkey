@@ -6,30 +6,20 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'SoftKey.GitHub.ps1')
 $repository = 'nitti87/Softkey'
 $environmentToken = $env:SOFTKEY_GITHUB_ACTIONS_TOKEN
+$git = Get-SoftKeyGitPath
 
-$checkoutCommit = & git -C $PSScriptRoot rev-parse --verify HEAD
+$checkoutCommit = & $git -C $PSScriptRoot rev-parse --verify HEAD
 if ($LASTEXITCODE -ne 0 -or $checkoutCommit -cnotmatch '^[0-9a-f]{40}$') { throw 'A Git checkout of SoftKey is required.' }
 $signTool = (Get-Item -LiteralPath $SignToolPath).FullName
-$actionsToken = $environmentToken
-if (-not $actionsToken) {
-    $hiddenToken = Read-Host -Prompt 'GitHub-token (Actions read-only)' -AsSecureString
-    try { $actionsToken = ([pscredential]::new('SoftKey', $hiddenToken)).GetNetworkCredential().Password }
-    finally { $hiddenToken.Dispose() }
-    if (-not $actionsToken) { throw 'A GitHub token is required.' }
-}
-$headers = @{
-    Authorization = 'Bearer ' + $actionsToken
-    Accept = 'application/vnd.github+json'
-    'X-GitHub-Api-Version' = '2022-11-28'
-}
+$headers = Get-SoftKeyGitHubHeaders -Token $environmentToken -AllowBrowserSignIn:(-not $Unattended)
 try {
     $run = Invoke-RestMethod -Uri "https://api.github.com/repos/$repository/actions/runs/$RunId" `
         -Headers $headers -UseBasicParsing -MaximumRedirection 0 -TimeoutSec 25
 } finally {
     $headers.Clear()
-    $actionsToken = $null
 }
 $commit = $run.head_sha
 if ($run.id -ne $RunId -or $run.status -cne 'completed' -or $run.conclusion -cne 'success' -or
@@ -40,13 +30,13 @@ if ($run.id -ne $RunId -or $run.status -cne 'completed' -or $run.conclusion -cne
     throw 'The selected run must be a successful build-and-test run for a commit pushed to main.'
 }
 
-$null = & git -C $PSScriptRoot rev-parse --quiet --verify "${commit}^{commit}"
+$null = & $git -C $PSScriptRoot rev-parse --quiet --verify "${commit}^{commit}"
 if ($LASTEXITCODE -ne 0) { throw 'The tested commit is not in the local checkout history.' }
-& git -C $PSScriptRoot merge-base --is-ancestor $commit $checkoutCommit
+& $git -C $PSScriptRoot merge-base --is-ancestor $commit $checkoutCommit
 if ($LASTEXITCODE -ne 0) {
-    $remote = & git -C $PSScriptRoot remote get-url origin
+    $remote = & $git -C $PSScriptRoot remote get-url origin
     if ($LASTEXITCODE -ne 0 -or $remote -ine 'https://github.com/nitti87/Softkey.git') { throw 'The tested commit is not in the local checkout history.' }
-    & git -C $PSScriptRoot merge-base --is-ancestor $commit refs/remotes/origin/main
+    & $git -C $PSScriptRoot merge-base --is-ancestor $commit refs/remotes/origin/main
     if ($LASTEXITCODE -ne 0) { throw 'The tested commit is not in the local checkout history.' }
 }
 Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -60,7 +50,7 @@ $staging = (New-Item -ItemType Directory -Path (Join-Path $output ([Guid]::NewGu
 try {
     $sourceArchive = Join-Path $staging 'source.zip'
     $source = Join-Path $staging 'source'
-    & git -C $PSScriptRoot archive --format=zip "--output=$sourceArchive" $commit
+    & $git -C $PSScriptRoot archive --format=zip "--output=$sourceArchive" $commit
     if ($LASTEXITCODE -ne 0) { throw 'Could not prepare a snapshot of the tested commit.' }
     [IO.Compression.ZipFile]::ExtractToDirectory($sourceArchive, $source)
 

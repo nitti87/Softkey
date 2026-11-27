@@ -628,6 +628,7 @@ static class StartupChecks
         DragKeySettings(output);
         SpecificSuggestionSetting(output);
         PhoneNumberDialog(output);
+        UpdateUiChecks(output);
         if (desktopOnly) DesktopInput(output);
         if (!desktopOnly)
         {
@@ -872,7 +873,7 @@ static class StartupChecks
                     Check(restricted || (window.WindowStyle == WindowStyle.SingleBorderWindow
                         && Field<StackPanel>(window, "menuLayer").IsVisible && Field<Button[]>(window, "menuHeaders").All(b => b.IsVisible)),
                         "simplifying sign-in preserves the desktop title bar and all desktop menus");
-                    Check(Field<StackPanel>(window, "menuLayer").Children.OfType<Button>().All(b => (string)b.Content != "Ctrl + Alt + Del"),
+                    Check(Field<StackPanel>(window, "menuLayer").Children.OfType<Button>().All(b => !Equals(b.Content, "Ctrl + Alt + Del")),
                         "Ctrl+Alt+Delete uses the existing keyboard keys without an extra button in " + (restricted ? "sign-in mode" : "desktop mode"));
                     window.SetInputGuard(() => true);
                     var control = KeyboardLayout.Rows.SelectMany(r => r).First(k => k.Label == "Ctl");
@@ -2075,7 +2076,7 @@ static class StartupChecks
                     "resizing and resetting SoftKey's topmost order leave the animated cover below both dialogs");
                 Render(progress, Path.Combine(output, "keyboard-save-progress.png"));
                 pending.SetResult(true);
-                WaitForUi(() => !progress.IsVisible);
+                WaitForUi(() => !progress.IsVisible && signIn.IsEnabled);
                 Check(sharedDialog.IsVisible && !progress.IsVisible && signIn.IsEnabled && !sharedApply.IsEnabled && keyboardContent.Opacity == 1,
                     "the desktop keyboard becomes visible again when the save completes");
 
@@ -2092,7 +2093,7 @@ static class StartupChecks
                     "the cover also sits below both dialogs when Always on top is disabled");
                 Render(progress, Path.Combine(output, "keyboard-signin-save-progress.png"));
                 pending.SetException(new InvalidOperationException("Ändringen avbröts i Windows."));
-                WaitForUi(() => !progress.IsVisible);
+                WaitForUi(() => !progress.IsVisible && signIn.IsEnabled);
                 Check(sharedDialog.IsVisible && !progress.IsVisible && keyboardContent.Opacity == 1 && signIn.IsEnabled && signIn.IsChecked == true
                     && sharedApply.IsEnabled && sharedSettings.ShareKeyboardLayoutAtSignIn
                     && h.IsEnabled && v.IsEnabled && f.IsEnabled && h.Value == 3 && v.Value == 3 && f.Value == 125
@@ -2304,7 +2305,7 @@ static class StartupChecks
         Point button = toggle.PointToScreen(new Point(toggle.ActualWidth / 2, toggle.ActualHeight / 2));
         Check(toolbar.TargetAt(button) == DwellTarget.ToggleKeyboardHeader && !toolbar.IsMoveAreaAt(button),
             placement + ": the header button supports dwell and is separate from the toolbar drag area");
-        var mouseMenu = Field<Button[]>(keyboard, "menuHeaders").Single(header => (string)header.Content == "Mus");
+        var mouseMenu = Field<Button[]>(keyboard, "menuHeaders").Single(header => Equals(header.Content, "Mus"));
         mouseMenu.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
         var popup = Field<System.Windows.Controls.Primitives.Popup>(keyboard, "menuPopup");
         Check(popup.IsOpen, placement + ": the desktop menu is available before collapsing the header");
@@ -2443,7 +2444,7 @@ static class StartupChecks
 
         DragKeySettingsWindow Open()
         {
-            var header = Field<Button[]>(keyboard, "menuHeaders").Single(button => (string)button.Content == "Mus");
+            var header = Field<Button[]>(keyboard, "menuHeaders").Single(button => Equals(button.Content, "Mus"));
             header.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             var panel = Field<Border>(keyboard, "menuPanel");
             Descendants<Button>(panel).Single(button => (string)button.Content == "Dragkey…")
@@ -2742,7 +2743,11 @@ static class StartupChecks
                 new DragKeySettingsWindow(settings, (_, _, _) => Task.FromResult(true)), new CloseConfirmationWindow(),
                 new SoftKeyNoticeWindow("SoftKey", "Kontroll av placering."),
                 new PasswordSuggestionWindow(_ => Task.FromResult<string>(null)),
-                new PhoneNumberWindow([], _ => Task.FromResult<string>(null)), list
+                new PhoneNumberWindow([], _ => Task.FromResult<string>(null)),
+                new SoftKeyUpdateWindow(new SoftKeyUpdates.Preview(42, new string('a', 40), "2026-11-27T12:00:00Z",
+                    "• Tydligare tangenttext.", new SoftKeyUpdates.Asset(42, "SoftKey-update-42.zip", "uploaded", 1784688, "sha256:" + new string('a', 64))),
+                    () => Task.FromResult<SoftKeyUpdates.Preview>(null), (_, _) => Task.CompletedTask),
+                list
             })
             {
                 try
@@ -3614,6 +3619,116 @@ static class StartupChecks
         {
             try { ShowOffscreen(sample.Window); Render(sample.Window, Path.Combine(output, sample.File)); }
             finally { sample.Window.Close(); }
+        }
+    }
+
+    static void UpdateUiChecks(string output)
+    {
+        string folder = Path.Combine(Path.GetTempPath(), "SoftKey-update-ui-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var storage = new JsonFileStorage(folder);
+            var keyboard = new KeyboardWindow(storage);
+            Field<DispatcherTimer>(keyboard, "dwellTimer").Stop();
+            try
+            {
+                ShowOffscreen(keyboard);
+                var indicator = Field<Border>(keyboard, "updateIndicator");
+                var headers = Field<Button[]>(keyboard, "menuHeaders");
+                var menu = Field<StackPanel>(keyboard, "menuLayer");
+                Check(indicator.Visibility == Visibility.Collapsed,
+                    "Arkiv update indicator is collapsed when no update is available");
+                double arkivWidthWithoutUpdate = headers[0].ActualWidth;
+                double gapWithoutUpdate = headers[1].TranslatePoint(default, menu).X - (headers[0].TranslatePoint(default, menu).X + headers[0].ActualWidth);
+                double standardGap = headers[2].TranslatePoint(default, menu).X - (headers[1].TranslatePoint(default, menu).X + headers[1].ActualWidth);
+                Check(Math.Abs(gapWithoutUpdate - standardGap) <= 0.5,
+                    "no extra menu gap appears between Arkiv and Tangentbord without an update");
+                Render(menu, Path.Combine(output, "update-menu-none.png"));
+
+                var preview = new SoftKeyUpdates.Preview(42, new string('a', 40), "2026-11-27T12:00:00Z",
+                    "• Tydligare tangenttext och smidigare storleksändring.\n• Uppdaterad menyindikator och ny uppdateringsdialog.",
+                    new SoftKeyUpdates.Asset(42, "SoftKey-update-42.zip", "uploaded", 1784688, "sha256:" + new string('a', 64)));
+                typeof(KeyboardWindow).GetField("availableUpdate", Fields).SetValue(keyboard, preview);
+                typeof(KeyboardWindow).GetMethod("RefreshUpdateIndicator", Fields).Invoke(keyboard, null);
+                Pump();
+                Check(indicator.Visibility == Visibility.Visible && indicator.Background == SoftKeyPopupDesign.Accent
+                    && headers[0].ActualWidth > arkivWidthWithoutUpdate,
+                    "Arkiv displays the high-contrast update badge only when an update is available");
+                var arkivItems = (StackPanel)typeof(KeyboardWindow).GetMethod("BuildMenuPanel", Fields).Invoke(keyboard, new object[] { 0 });
+                var updateMenuItem = (Button)arkivItems.Children[0];
+                Check(updateMenuItem.Content is StackPanel row && row.Children.OfType<Border>().Any(),
+                    "Arkiv dropdown highlights Uppdatering when an update is available");
+                Render(menu, Path.Combine(output, "update-menu-available.png"));
+            }
+            finally { keyboard.EnablePreviewClose(); keyboard.Close(); }
+
+            var pendingFetch = new TaskCompletionSource<SoftKeyUpdates.Preview>();
+            var searching = new SoftKeyUpdateWindow(null, () => pendingFetch.Task, (_, _) => Task.CompletedTask);
+            try
+            {
+                ShowOffscreen(searching);
+                Check(!searching.ShowInTaskbar && !searching.ShowActivated,
+                    "update dialog opens without stealing taskbar space or focus");
+                Check(Field<ProgressBar>(searching, "searchProgress").Visibility == Visibility.Visible
+                    && Field<TextBlock>(searching, "title").Text.Contains("Söker"),
+                    "update dialog shows progress feedback while checking for updates");
+                Render(searching, Path.Combine(output, "dialog-update-searching.png"));
+
+                pendingFetch.SetResult(null);
+                Pump();
+                Check(Field<ProgressBar>(searching, "searchProgress").Visibility == Visibility.Collapsed
+                    && Field<Border>(searching, "description").Visibility == Visibility.Collapsed
+                    && Field<Button>(searching, "check").Visibility == Visibility.Visible
+                    && Field<Button>(searching, "install").Visibility == Visibility.Collapsed,
+                    "up-to-date state hides release notes and shows the check button");
+                Render(searching, Path.Combine(output, "dialog-update-uptodate.png"));
+
+                var failedFetch = new SoftKeyUpdateWindow(null, () => Task.FromException<SoftKeyUpdates.Preview>(new IOException("offline")),
+                    (_, _) => Task.CompletedTask);
+                try
+                {
+                    ShowOffscreen(failedFetch);
+                    Pump();
+                    Check(Field<Border>(failedFetch, "feedbackCard").Visibility == Visibility.Visible
+                        && Field<Button>(failedFetch, "check").IsEnabled,
+                        "failed update check shows feedback card and allows retry");
+                }
+                finally { failedFetch.Close(); }
+            }
+            finally { searching.Close(); }
+
+            var previewUpdate = new SoftKeyUpdates.Preview(48, new string('b', 40), "2026-11-27T14:00:00Z",
+                "• Tydligare tangenttext och smidigare storleksändring.\n• Uppdaterad menyindikator och ny uppdateringsdialog.",
+                new SoftKeyUpdates.Asset(48, "SoftKey-update-48.zip", "uploaded", 12_900_000, "sha256:" + new string('b', 64)));
+            var availableDialog = new SoftKeyUpdateWindow(previewUpdate, () => Task.FromResult(previewUpdate), (_, _) => Task.CompletedTask);
+            try
+            {
+                ShowOffscreen(availableDialog);
+                Check(Field<Border>(availableDialog, "description").Visibility == Visibility.Visible
+                    && Field<Button>(availableDialog, "install").Visibility == Visibility.Visible
+                    && Field<Button>(availableDialog, "check").Visibility == Visibility.Collapsed,
+                    "available update state shows release notes and install button");
+                Render(availableDialog, Path.Combine(output, "dialog-update-available.png"));
+
+                var progressView = Field<SoftKeyUpdateProgressView>(availableDialog, "progress");
+                Field<StackPanel>(availableDialog, "summary").Visibility = Visibility.Collapsed;
+                progressView.Content.Visibility = Visibility.Visible;
+                progressView.Show(new SoftKeyUpdates.Progress(58, "Hämtar uppdateringen", "SoftKey-update-48.zip  ·  7,2 av 12,4 MB"));
+                Pump();
+                Render(availableDialog, Path.Combine(output, "dialog-update-progress.png"));
+            }
+            finally { availableDialog.Close(); }
+
+            string xaml = SoftKeyUpdateProgressView.InstallationContent(488);
+            var parsed = (DependencyObject)System.Windows.Markup.XamlReader.Parse(xaml);
+            Check(LogicalTreeHelper.FindLogicalNode(parsed, "UpdateStatus") is TextBlock
+                && LogicalTreeHelper.FindLogicalNode(parsed, "UpdateDetail") is TextBlock
+                && LogicalTreeHelper.FindLogicalNode(parsed, "UpdateBar") is ProgressBar,
+                "installation progress XAML preserves UpdateStatus, UpdateDetail and UpdateBar");
+        }
+        finally
+        {
+            if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
         }
     }
 }

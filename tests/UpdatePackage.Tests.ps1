@@ -1,5 +1,5 @@
 $ErrorActionPreference = 'Stop'
-. (Join-Path (Split-Path -Parent $PSScriptRoot) 'SoftKey.UpdatePackage.ps1')
+. (Join-Path (Split-Path -Parent $PSScriptRoot) 'SoftKey.UpdateDistribution.ps1')
 
 function Assert-UpdateRejected([scriptblock]$Check, [string]$Message) {
     try { & $Check | Out-Null }
@@ -9,6 +9,48 @@ function Assert-UpdateRejected([scriptblock]$Check, [string]$Message) {
         return
     }
     throw "The package unexpectedly passed: $Message"
+}
+
+& {
+    . (Join-Path (Split-Path -Parent $PSScriptRoot) 'SoftKey.GitHub.ps1')
+    $gitState = @{ Lookups = 0; SignIns = 0; HasCredential = $false }
+    function Get-SoftKeyGitPath { 'Invoke-TestGit' }
+    function Invoke-TestGit {
+        $global:LASTEXITCODE = 0
+        if (($args -join ' ') -ceq 'credential-manager github login --username nitti87 --browser') {
+            $gitState.SignIns++
+            $gitState.HasCredential = $true
+            return
+        }
+        if (($args -join ' ') -cne 'credential-manager get' -or $env:GCM_INTERACTIVE -ne 'false' -or
+            ($input -join '') -cne "protocol=https`nhost=github.com`nusername=nitti87`n`n") {
+            throw 'The GitHub credential lookup must be noninteractive and limited to the expected account.'
+        }
+        $gitState.Lookups++
+        if ($gitState.HasCredential) { 'username=nitti87'; 'password=test-cached-credential' }
+        else { $global:LASTEXITCODE = 1 }
+    }
+
+    $previousInteractive = $env:GCM_INTERACTIVE
+    $env:GCM_INTERACTIVE = 'true'
+    try {
+        $explicit = Get-SoftKeyGitHubHeaders -Token 'test-explicit-credential' -AllowBrowserSignIn
+        if ($explicit.Authorization -cne 'Bearer test-explicit-credential' -or $gitState.Lookups -ne 0) {
+            throw 'An explicitly supplied token must bypass Git Credential Manager.'
+        }
+        Assert-UpdateRejected { Get-SoftKeyGitHubHeaders } 'GitHub sign-in is required'
+        if ($gitState.SignIns -ne 0) { throw 'An unattended run opened a browser.' }
+
+        $first = Get-SoftKeyGitHubHeaders -AllowBrowserSignIn
+        $second = Get-SoftKeyGitHubHeaders -AllowBrowserSignIn
+        $unattended = Get-SoftKeyGitHubHeaders
+        if ($gitState.SignIns -ne 1 -or $first.Authorization -cne 'Bearer test-cached-credential' -or
+            $second.Authorization -cne $first.Authorization -or $unattended.Authorization -cne $first.Authorization -or
+            $env:GCM_INTERACTIVE -ne 'true') {
+            throw 'SoftKey should sign in once and reuse the saved credential in both interactive and unattended runs.'
+        }
+        Write-Output 'PASS reused one browser sign-in for subsequent GitHub operations'
+    } finally { $env:GCM_INTERACTIVE = $previousInteractive }
 }
 
 $scratch = Join-Path ([IO.Path]::GetTempPath()) ('SoftKey-package-checks-' + [Guid]::NewGuid().ToString('N'))
@@ -32,6 +74,66 @@ try {
         throw 'The signed package lost build identity or a component.'
     }
     Write-Output 'PASS verified the signed build and all sixteen files'
+
+    & {
+        $packageFile = Get-Item -LiteralPath $archive
+        $asset = [pscustomobject]@{
+            id=1; name=$packageFile.Name; state='uploaded'; size=$packageFile.Length
+            digest='sha256:' + (Get-FileHash -LiteralPath $archive).Hash.ToLowerInvariant()
+        }
+        $release = [pscustomobject]@{
+            draft=$false; prerelease=$true; tag_name='softkey-preview-42'; target_commitish=$commit
+            body='Changes shown before the package is downloaded.'; published_at='2026-11-27T12:00:00Z'; assets=@($asset)
+        }
+        $transfer = @{Count=0; Bytes=0; Verifications=0}
+        function Get-SoftKeyReleases([hashtable]$Headers) {
+            if ($Headers.ContainsKey('Authorization')) { throw 'Public discovery attempted to authenticate.' }
+            $release
+        }
+        function Copy-SoftKeyReleaseAsset($Asset, [hashtable]$Headers, [IO.Stream]$Destination, [scriptblock]$OnBytes) {
+            if ($Headers.ContainsKey('Authorization')) { throw 'Public download attempted to authenticate.' }
+            $transfer.Count++
+            $bytes = [IO.File]::ReadAllBytes($archive)
+            $Destination.Write($bytes, 0, $bytes.Length)
+            & $OnBytes $bytes.Length $Asset.size
+        }
+        $public = Get-SoftKeyPublicReleaseHeaders
+        $preview = Find-SoftKeyPreview 41 $public
+        if ($transfer.Count -ne 0 -or $preview.BuildNumber -ne 42 -or $preview.Notes -cne $release.body -or
+            (Find-SoftKeyPreview 42 $public)) {
+            throw 'Discovery must return newer release metadata without downloading.'
+        }
+        $download = @{Preview=$preview; InstalledBuildNumber=41; Cache=(Join-Path $scratch 'PublicCache'); Headers=$public;
+            Certificate=$certificate; OnBytes={ param($current, $length) $transfer.Bytes = $current };
+            OnVerify={ $transfer.Verifications++ }}
+        $receivedPackage = Receive-SoftKeyPreview @download
+        $retriedPackage = Receive-SoftKeyPreview @download
+        if ($transfer.Count -ne 1 -or $transfer.Bytes -ne $asset.size -or $transfer.Verifications -ne 2 -or
+            $receivedPackage.Commit -cne $commit -or $retriedPackage.VerifiedDownload -ine $receivedPackage.VerifiedDownload) {
+            throw ("Unexpected public update result. Downloads: $($transfer.Count). Bytes: $($transfer.Bytes) of $($asset.size). " +
+                "Verifications: $($transfer.Verifications). Results: $(@($receivedPackage).Count)/$(@($retriedPackage).Count). " +
+                "Commit: '$($receivedPackage.Commit)' (expected '$commit'). Paths: '$($receivedPackage.VerifiedDownload)' / '$($retriedPackage.VerifiedDownload)'.")
+        }
+        Write-Output 'PASS public discovery did not download, and the user-initiated download verified its bytes and signature'
+    }
+
+    $feed = Join-Path $scratch 'OneDrive\SoftKey\Updates'
+    $cache = Join-Path $scratch 'Cache'
+    $published = Copy-SoftKeyUpdateToFolder -Source $archive -Destination $feed -Certificate $certificate
+    $retried = Copy-SoftKeyUpdateToFolder -Source $archive -Destination $feed -Certificate $certificate
+    if ($retried.VerifiedDownload -cne $published.VerifiedDownload) { throw 'A OneDrive retry changed the destination.' }
+    [IO.File]::Copy($archive, (Join-Path $feed 'SoftKey-update-44-DEVPC.zip'))
+    $received = Receive-SoftKeyFolderPreview 41 $feed $cache $certificate
+    if ($received.BuildNumber -ne 42 -or $received.Commit -cne $commit -or
+        $received.VerifiedDownload -cne (Join-Path $cache 'SoftKey-update-42.zip') -or
+        (Get-FileHash -LiteralPath $received.VerifiedDownload).Hash -cne (Get-FileHash -LiteralPath $archive).Hash -or
+        (Receive-SoftKeyFolderPreview 42 $feed $cache $certificate)) {
+        throw 'The synced folder did not deliver only newer verified packages to the local cache.'
+    }
+    [IO.File]::Copy($archive, (Join-Path $feed 'SoftKey-update-43.zip'))
+    Assert-UpdateRejected { Receive-SoftKeyFolderPreview 41 $feed $cache $certificate } 'filename does not match'
+    if (@([IO.Directory]::EnumerateFiles($cache)).Count -ne 1) { throw 'A failed OneDrive check left an unverified file in the cache.' }
+    Write-Output 'PASS copied and verified a newer signed update from a local OneDrive folder without credentials'
 
     $hash = (Get-FileHash -LiteralPath $archive).Hash
     Assert-UpdateRejected { New-SoftKeyUpdateArchive @newArchive } 'already exists'
