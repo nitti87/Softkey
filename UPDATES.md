@@ -55,7 +55,7 @@ Om byggdatorns GitHub-inloggning har återkallats kan samma Windows-användare f
 |---|---|
 | Schemalagd sökning, ikon och menyval | [KeyboardWindow.Updates.cs](KeyboardWindow.Updates.cs), [KeyboardWindow.Menu.cs](KeyboardWindow.Menu.cs) |
 | Versionsdialog, förlopp och omstart | [SoftKeyUpdateWindow.cs](SoftKeyUpdateWindow.cs), [SoftKeyUpdateProgressView.cs](SoftKeyUpdateProgressView.cs), [SoftKeyUpdates.cs](SoftKeyUpdates.cs) |
-| GitHub, pakethämtning och signaturkontroll | [SoftKey.UpdateDistribution.ps1](SoftKey.UpdateDistribution.ps1), [SoftKey.UpdatePackage.ps1](SoftKey.UpdatePackage.ps1) |
-| Installation, förloppsfönster och återställning | [SoftKey.ApplyUpdate.ps1](SoftKey.ApplyUpdate.ps1), [SoftKey.InstallProgress.ps1](SoftKey.InstallProgress.ps1) |
+| Signaturkontroll och inbyggd installation i C# | [SoftKeyUpdateArchive.cs](SoftKeyUpdateArchive.cs), [SoftKeyUpdateInstaller.cs](SoftKeyUpdateInstaller.cs) |
+| Paketering och publicering på byggdatorn | [SoftKey.UpdateDistribution.ps1](SoftKey.UpdateDistribution.ps1), [SoftKey.UpdatePackage.ps1](SoftKey.UpdatePackage.ps1), [Start-SoftKeyDelivery.ps1](Start-SoftKeyDelivery.ps1) |
 
 [UpdatePackage.Tests.ps1](tests/UpdatePackage.Tests.ps1) provar att sökningen bara läser versionsinformationen, att en uttrycklig hämtning rapporterar filförlopp och att ändrade eller obehörigt signerade paket avvisas. Proven passerade i Windows PowerShell 5.1 och PowerShell 7. Dialogen och det fristående förloppsfönstret provades lokalt. Den 27 november 2026 rapporterade den samordnade lokala installationen att både skrivbordsappen och den separata inloggningsdelen hade uppdaterats. En komplett GitHub-uppdatering och ett praktiskt prov med HeadMouse på den riktiga Windows-inloggningsskärmen återstår att verifiera.

@@ -2,6 +2,7 @@ using System;
 using System.ComponentModel;
 using System.Globalization;
 using System.IO;
+using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -212,7 +213,7 @@ sealed class SoftKeyUpdateWindow : Window
             busy = false;
             SetAvailable(result);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or
+        catch (Exception ex) when (ex is IOException or HttpRequestException or UnauthorizedAccessException or JsonException or
             InvalidOperationException or Win32Exception or OperationCanceledException)
         {
             SetGlyph(InfoIconOutline);
@@ -244,13 +245,14 @@ sealed class SoftKeyUpdateWindow : Window
             busy = false;
             Close();
         }
-        catch (Exception ex) when (ex is Win32Exception or IOException or UnauthorizedAccessException or
+        catch (Exception ex) when (ex is Win32Exception or IOException or HttpRequestException or UnauthorizedAccessException or
             InvalidOperationException or CryptographicException or JsonException or OperationCanceledException)
         {
             ShowFeedback(ex switch
             {
                 Win32Exception { NativeErrorCode: 1223 } => "Installationen avbröts när Windows bad om godkännande.",
                 IOException => ex.Message,
+                HttpRequestException => "Uppdateringen kunde inte hämtas. Kontrollera internetanslutningen och försök igen.",
                 _ => "Uppdateringen kunde inte slutföras. Försök igen."
             });
             summary.Visibility = Visibility.Visible;

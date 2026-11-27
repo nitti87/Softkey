@@ -29,6 +29,8 @@ static class StartupProgram
             }
             if (args.Length == 1 && args[0] == "--launch") { StartupPriority.Apply(); return StartupLauncher.Run(); }
             if (args.Length == 1 && args[0] == "--login-broker") { LockedDesktopBroker.Run(); return 0; }
+            if (args.Length == 9 && args[0] == SoftKeyUpdateInstaller.ApplyArgument) return SoftKeyUpdateInstaller.StageAndLaunch(args);
+            if (args.Length == 10 && args[0] == SoftKeyUpdateInstaller.StagedArgument) return SoftKeyUpdateInstaller.RunStaged(args);
             if (args.Length == 4 && args[0] == DesktopCrashRecovery.WatchArgument)
             {
                 if (!int.TryParse(args[1], NumberStyles.None, CultureInfo.InvariantCulture, out int watched) || watched <= 0

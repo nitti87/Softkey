@@ -401,47 +401,81 @@ static class Program
             && words.Contains("kontrollord"),
             "transient error recovery resets interaction state without altering personal words");
 
-        var progressViewType = assembly.GetType("SoftKeyUpdateProgressView", true);
-        string progressXaml = (string)progressViewType.GetMethod("InstallationContent").Invoke(null, new object[] { 488.0 });
         var updatesType = assembly.GetType("SoftKeyUpdates", true);
-        var resMethod = updatesType.GetMethod("Resource", BindingFlags.Static | BindingFlags.NonPublic);
-        var paramMethod = updatesType.GetMethod("Parameters", BindingFlags.Static | BindingFlags.NonPublic);
-        var startInfoMethod = updatesType.GetMethod("StartInfo", BindingFlags.Static | BindingFlags.NonPublic);
-        string fullInstallScript = (string)paramMethod.Invoke(null, new object[]
+        Check(updatesType.GetMethod("StartInfo", BindingFlags.Static | BindingFlags.NonPublic) == null
+            && updatesType.GetField("PowerShell", BindingFlags.Static | BindingFlags.NonPublic) == null,
+            "SoftKeyUpdates runs natively in C# without spawning hidden PowerShell commands");
+
+        var parsePreview = updatesType.GetMethod("ParsePreviewJson", BindingFlags.Static | BindingFlags.NonPublic);
+        string sampleReleases = JsonSerializer.Serialize(new[]
         {
             new
             {
-                PackagePath = @"C:\Users\nitti\AppData\Local\SoftKey\Updates\SoftKey-update-5.zip",
-                BuildNumber = 5L,
-                Commit = new string('a', 40),
-                InstalledBuild = 0L,
-                DesktopProcess = 1234,
-                DesktopStarted = 123456L,
-                ProgressContent = progressXaml,
-                Left = 100.0,
-                Top = 100.0
+                draft = false, prerelease = true, tag_name = "softkey-preview-7", target_commitish = new string('b', 40),
+                body = "• Svenska nyheter: åäö", published_at = "2026-11-27T18:00:00Z",
+                assets = new[] { new { id = 10L, name = "SoftKey-update-7.zip", state = "uploaded", size = 1048576L, digest = "sha256:" + new string('c', 64) } }
+            },
+            new
+            {
+                draft = true, prerelease = true, tag_name = "softkey-preview-9", target_commitish = new string('d', 40),
+                body = "draft", published_at = "2026-11-27T19:00:00Z",
+                assets = new[] { new { id = 11L, name = "SoftKey-update-9.zip", state = "uploaded", size = 1048576L, digest = "sha256:" + new string('e', 64) } }
             }
-        })
-            + (string)resMethod.Invoke(null, new object[] { "SoftKey.UpdatePackage.ps1" })
-            + (string)resMethod.Invoke(null, new object[] { "SoftKey.InstallProgress.ps1" })
-            + "\nInvoke-SoftKeyInstallWithProgress {\n"
-            + (string)resMethod.Invoke(null, new object[] { "SoftKey.ApplyUpdate.ps1" })
-            + "\n}\n";
-        var installPsi = (ProcessStartInfo)startInfoMethod.Invoke(null, new object[] { fullInstallScript });
-        Check(installPsi.Arguments.Length < 16_000,
-            $"update install worker command stays well below Windows' limit ({installPsi.Arguments.Length} chars)");
+        });
+        var parsedPreview = parsePreview.Invoke(null, new object[] { sampleReleases, 6L });
+        Check(parsedPreview != null && (long)parsedPreview.GetType().GetProperty("BuildNumber").GetValue(parsedPreview) == 7L
+            && (string)parsedPreview.GetType().GetProperty("Notes").GetValue(parsedPreview) == "• Svenska nyheter: åäö"
+            && parsePreview.Invoke(null, new object[] { sampleReleases, 7L }) == null,
+            "native release parser selects the newest published prerelease and ignores drafts and older builds");
 
-        string roundTripScript = (string)paramMethod.Invoke(null, new object[] { new { Text = "åäö • test 'quote'" } })
-            + "Write-Output $updateParameters.Text";
-        var roundTripPsi = (ProcessStartInfo)startInfoMethod.Invoke(null, new object[] { roundTripScript });
-        roundTripPsi.RedirectStandardOutput = true;
-        roundTripPsi.StandardOutputEncoding = System.Text.Encoding.UTF8;
-        using (var probe = Process.Start(roundTripPsi))
+        var allowedRedirect = updatesType.GetMethod("IsAllowedDownloadRedirect", BindingFlags.Static | BindingFlags.NonPublic);
+        Check((bool)allowedRedirect.Invoke(null, new object[] { new Uri("https://release-assets.githubusercontent.com/file") })
+            && (bool)allowedRedirect.Invoke(null, new object[] { new Uri("https://objects.githubusercontent.com/file") })
+            && !(bool)allowedRedirect.Invoke(null, new object[] { new Uri("http://release-assets.githubusercontent.com/file") })
+            && !(bool)allowedRedirect.Invoke(null, new object[] { new Uri("https://example.invalid/file") }),
+            "native update download restricts redirects strictly to GitHub HTTPS asset hosts");
+
+        var archiveType = assembly.GetType("SoftKeyUpdateArchive", true);
+        var readVerified = archiveType.GetMethod("ReadVerified", BindingFlags.Static | BindingFlags.NonPublic);
+        var loadTrusted = archiveType.GetMethod("LoadTrustedCertificate", BindingFlags.Static | BindingFlags.NonPublic);
+        Directory.CreateDirectory(folder);
+        using (var rsa = System.Security.Cryptography.RSA.Create(2048))
         {
-            string stdout = probe.StandardOutput.ReadToEnd().Trim();
-            probe.WaitForExit(10_000);
-            Check(probe.ExitCode == 0 && stdout == "åäö • test 'quote'",
-                "compressed PowerShell launcher preserves UTF-8 text and quotes");
+            var req = new System.Security.Cryptography.X509Certificates.CertificateRequest(
+                "CN=SoftKey native test", rsa, System.Security.Cryptography.HashAlgorithmName.SHA256,
+                System.Security.Cryptography.RSASignaturePadding.Pkcs1);
+            using var testCert = req.CreateSelfSigned(DateTimeOffset.Now.AddMinutes(-1), DateTimeOffset.Now.AddHours(1));
+            string badZip = Path.Combine(folder, "bad-update.zip");
+            File.WriteAllBytes(badZip, new byte[] { 1, 2, 3, 4 });
+            bool rejectedBad = false;
+            try { readVerified.Invoke(null, new object[] { badZip, testCert, 0L }); }
+            catch (TargetInvocationException) { rejectedBad = true; }
+            Check(rejectedBad, "native archive verifier rejects invalid or unsigned archives");
+
+            string realArchive = Path.Combine(Path.GetDirectoryName(assemblyPath), "..", "..", "..", "..", "Updates", "SoftKey-update-6.zip");
+            if (File.Exists(realArchive))
+            {
+                using var trustedCert = (System.Security.Cryptography.X509Certificates.X509Certificate2)loadTrusted.Invoke(null, null);
+                var realManifest = readVerified.Invoke(null, new object[] { realArchive, trustedCert, 5L });
+                Check(realManifest != null && (long)realManifest.GetType().GetProperty("BuildNumber").GetValue(realManifest) == 6L,
+                    "native CryptVerifyMessageSignature verifies the real signed SoftKey update archive");
+                bool rejectedWrongCert = false;
+                try { readVerified.Invoke(null, new object[] { realArchive, testCert, 5L }); }
+                catch (TargetInvocationException) { rejectedWrongCert = true; }
+                Check(rejectedWrongCert, "native archive verifier rejects an archive signed by a different certificate");
+                string tampered = Path.Combine(folder, "tampered.zip");
+                File.Copy(realArchive, tampered, overwrite: true);
+                using (var z = System.IO.Compression.ZipFile.Open(tampered, System.IO.Compression.ZipArchiveMode.Update))
+                {
+                    var e = z.GetEntry("SoftKey.exe");
+                    using var s = e.Open();
+                    s.WriteByte(0);
+                }
+                bool rejectedTampered = false;
+                try { readVerified.Invoke(null, new object[] { tampered, trustedCert, 5L }); }
+                catch (TargetInvocationException) { rejectedTampered = true; }
+                Check(rejectedTampered, "native archive verifier rejects a tampered binary inside a signed archive");
+            }
         }
 
         Set(window, "closeConfirmed", true);

@@ -16,7 +16,6 @@
     <Compile Remove="Startup/**/*.cs" />
     <Compile Remove="Softkey/**/*.cs" />
     <EmbeddedResource Include="words.json" LogicalName="words.json" />
-    <EmbeddedResource Include="SoftKey.UpdatePackage.ps1;SoftKey.UpdateDistribution.ps1;SoftKey.InstallProgress.ps1;SoftKey.ApplyUpdate.ps1" />
     <AssemblyMetadata Include="SoftKeyUpdateBuild" Value="$(SoftKeyUpdateBuild)" />
   </ItemGroup>
 </Project>

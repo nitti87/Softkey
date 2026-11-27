@@ -79,7 +79,7 @@ static class StartupLauncher
         return false;
     }
 
-    static bool LaunchFromExplorer(StartupInstallation installation, string arguments)
+    internal static bool LaunchFromExplorer(StartupInstallation installation, string arguments)
     {
         // Keep the keyboard independent of the scheduled task's process lifetime.
         object windows = null, desktop = null, view = null, shell = null;

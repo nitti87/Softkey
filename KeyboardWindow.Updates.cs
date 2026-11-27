@@ -55,8 +55,7 @@ partial class KeyboardWindow
                 throw new InvalidOperationException("Uppdatera från det aktiva Windows-skrivbordet.");
             progress.Report(new SoftKeyUpdates.Progress(59, "Väntar på Windows godkännande", "Bekräfta i Windows för att fortsätta installationen."));
             var dialog = updateWindow;
-            string content = SoftKeyUpdateProgressView.InstallationContent(Math.Max(280, dialog.ActualWidth - 18));
-            await SoftKeyUpdates.StartInstallAsync(preview, package, content, dialog.Left, dialog.Top);
+            await SoftKeyUpdates.StartInstallAsync(preview, package, dialog.Left, dialog.Top, Math.Max(280, dialog.ActualWidth - 18));
             _ = Dispatcher.BeginInvoke(new Action(CloseForDesktopTransition), DispatcherPriority.ApplicationIdle);
         }) { Owner = this, Topmost = cfg.AlwaysOnTop };
         updateWindow.Closed += (_, _) => updateWindow = null;
