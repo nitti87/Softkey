@@ -2,7 +2,7 @@
 
 ## Uppdatera från SoftKey
 
-1. När den installerade skrivbordsappen startar kontrollerar SoftKey versionsinformationen på offentliga GitHub Releases efter cirka tolv sekunder och sedan ungefär en gång i timmen. Kontrollen använder varken konto eller token.
+1. När den installerade skrivbordsappen startar kontrollerar SoftKey versionsinformationen på offentliga GitHub Releases efter cirka två sekunder och därefter var femtonde minut. Om kontrollen misslyckas gör SoftKey ett nytt försök efter två minuter. Om kontrollen behöver vänta på ett aktivt skrivbord startar den kort efter att skrivbordet är tillgängligt igen. Kontrollen använder varken konto eller token.
 2. En diskret blå statuspunkt visas vid **Arkiv** när en nyare version finns (och märkningen **Ny** visas vid **Uppdatering…** inne i menyn). Öppna **Arkiv → Uppdatering…** för att se versionssteg, publiceringsdatum, paketstorlek, signaturstatus och kategoriserade versionsanteckningar. Om ingen version visas kan du välja **Sök efter uppdateringar** i dialogen.
 3. Välj **Installera uppdateringen** när du vill fortsätta. Först då börjar hämtningen av ZIP-paketet. Förloppsrutan visar paketnamn och hämtad storlek, följt av signaturkontrollen.
 4. Godkänn installationen när Windows frågar. SoftKey sparar skrivbordsinställningarna och stänger tangentbordet så att programfilerna kan bytas. Förloppsrutan ligger kvar och visar aktuell fil och antal filer. Installationsprogrammet verifierar den nya versionen och öppnar SoftKey igen.
@@ -43,7 +43,7 @@ Om byggdatorns GitHub-inloggning har återkallats kan samma Windows-användare f
 
 | Vad du ser | Vad du kontrollerar |
 |---|---|
-| Ingen statuspunkt vid **Arkiv** | Öppna **Arkiv → Uppdatering…** och sök igen. Kontrollera anslutningen och att GitHub har en publicerad förhandsversion med högre byggnummer och rätt ZIP-fil. |
+| Ingen statuspunkt vid **Arkiv** | Kontrollera anslutningen och att GitHub har en publicerad förhandsversion med högre byggnummer och rätt ZIP-fil. Du kan även söka direkt via **Arkiv → Uppdatering…**. |
 | **Installera uppdateringen** är inaktiv | Öppna den installerade skrivbordsappen. En lokal förhandsvisning kan visa versionsinformationen. |
 | Hämtningen eller verifieringen misslyckas | Försök igen från dialogen. Kontrollera på byggdatorn att rätt signerat paket ligger på rätt release. |
 | Windows avbryter installationen | Starta om uppdateringen från skrivbordsappen och godkänn Windows dialog när den visas. |
@@ -58,4 +58,4 @@ Om byggdatorns GitHub-inloggning har återkallats kan samma Windows-användare f
 | Signaturkontroll och inbyggd installation i C# | [SoftKeyUpdateArchive.cs](SoftKeyUpdateArchive.cs), [SoftKeyUpdateInstaller.cs](SoftKeyUpdateInstaller.cs) |
 | Paketering och publicering på byggdatorn | [SoftKey.UpdateDistribution.ps1](SoftKey.UpdateDistribution.ps1), [SoftKey.UpdatePackage.ps1](SoftKey.UpdatePackage.ps1), [Start-SoftKeyDelivery.ps1](Start-SoftKeyDelivery.ps1) |
 
-[UpdatePackage.Tests.ps1](tests/UpdatePackage.Tests.ps1) provar att sökningen bara läser versionsinformationen, att en uttrycklig hämtning rapporterar filförlopp och att ändrade eller obehörigt signerade paket avvisas. Proven passerade i Windows PowerShell 5.1 och PowerShell 7. Dialogen och det fristående förloppsfönstret provades lokalt. Den 27 november 2026 rapporterade den samordnade lokala installationen att både skrivbordsappen och den separata inloggningsdelen hade uppdaterats. En komplett GitHub-uppdatering och ett praktiskt prov med HeadMouse på den riktiga Windows-inloggningsskärmen återstår att verifiera.
+[UpdatePackage.Tests.ps1](tests/UpdatePackage.Tests.ps1) provar att sökningen bara läser versionsinformationen, att en uttrycklig hämtning rapporterar filförlopp och att ändrade eller obehörigt signerade paket avvisas. UI-proven kontrollerar också att bakgrundssökningen återupptas på ett aktivt skrivbord, försöker igen vid anslutningsfel och visar en ny version även när Arkiv redan är öppet. Användaren har bekräftat att temauppdateringen installerades via GitHub. Ett praktiskt prov med HeadMouse på den riktiga Windows-inloggningsskärmen återstår att verifiera.

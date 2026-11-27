@@ -1514,12 +1514,14 @@ static class StartupChecks
                     Check(!settings.AutoClick && controls.Where(b => b != autoClick).All(b => !b.IsEnabled) && autoClick.IsEnabled,
                         placement + ": paused autoclick disables every other toolbar button, including undock and keyboard visibility");
                     if (placement == DragKeyPlacement.Floating)
-                        Check(((Image)((Viewbox)toggle.Content).Child).Source == DragKeySymbols.Image(DragKeySymbol.Keyboard, paused: true)
-                            && ((Image)((Viewbox)autoClick.Content).Child).Source == DragKeySymbols.Image(DragKeySymbol.AutoClick),
-                            "a paused desktop toolbar uses gray artwork only for unavailable actions");
+                        Check(((Image)((Viewbox)toggle.Content).Child).Source == DragKeySymbols.Image(DragKeySymbol.Keyboard, paused: true),
+                            "a paused desktop toolbar uses gray artwork for unavailable actions");
                     Check(toolbar.TargetAt(autoClick.PointToScreen(new Point(autoClick.ActualWidth / 2, autoClick.ActualHeight / 2))) == DwellTarget.AutoClick
                         && toolbar.TargetAt(toggle.PointToScreen(new Point(toggle.ActualWidth / 2, toggle.ActualHeight / 2))) == DwellTarget.None,
                         placement + ": only the AutoClick resume control remains a dwell target while paused");
+                    Check(((Image)((Viewbox)autoClick.Content).Child).Source == DragKeySymbols.Image(DragKeySymbol.AutoClickPaused)
+                        && Field<TextBlock>(keyboard, "dragKeyStatus").Text == "Autoklick pausat",
+                        placement + ": the pause glyph and keyboard status describe the paused state");
                     Call(keyboard, "PerformDwell", DwellTarget.ToggleKeyboard);
                     Call(keyboard, "PerformDwell", DwellTarget.ToggleKeyboardHeader);
                     Call(keyboard, "PerformDwell", DwellTarget.UndockDragKey);
@@ -1551,6 +1553,8 @@ static class StartupChecks
                         placement + ": the highlighted show-keyboard button is disabled too when autoclick is paused");
                     Call(keyboard, "PerformDwell", DwellTarget.ToggleKeyboard);
                     Check(!keyboard.IsVisible, placement + ": a paused dwell cannot show the hidden keyboard");
+                    Check(Field<TextBlock>(toolbar, "hiddenKeyboardStatus") is { IsVisible: true, Text: "Autoklick pausat" },
+                        placement + ": DragKey shows the paused status when the keyboard is hidden");
                     if (placement == DragKeyPlacement.Top) Render(toolbar, Path.Combine(output, "dragkey-autoclick-paused.png"));
                     Call(keyboard, "PerformDwell", DwellTarget.AutoClick);
                     Call(keyboard, "PerformDwell", DwellTarget.ToggleKeyboard); Pump();
@@ -2528,13 +2532,20 @@ static class StartupChecks
                 && liveGrid.Children.OfType<DragKeyButton>().All(button => Scaled((Viewbox)button.Content, 0.85)),
                 "applying Small reduces the side-docked panel and its buttons and persists the 85 percent artwork scale");
             var cells = liveGrid.Children.OfType<Button>().Where(button => button.IsVisible)
-                .Select(button => button.TranslatePoint(new Point(0, 0), toolbar.Surface)).ToArray();
+                .Select(button => (Border)button.Template.FindName("Frame", button))
+                .Select(face => face.TranslatePoint(default, toolbar.Surface)).ToArray();
             Check(cells.Length == 11 && cells.Select(cell => cell.X).Distinct().Count() == 2 && cells.Select(cell => cell.Y).Distinct().Count() == 6,
                 "all eleven buttons are laid out in two columns on the side");
             Check(power.TranslatePoint(new Point(0, power.ActualHeight), toolbar.Surface).Y <= toolbar.Surface.ActualHeight,
                 "all three drag buttons and the final power button fit in the vertical dock");
             Check(DragKeyIconsFit(toolbar), "the artwork has the same clearance in the compact side dock");
             var auto = Field<DragKeyButton>(toolbar, "autoClick");
+            var autoFace = (Border)auto.Template.FindName("Frame", auto);
+            var pointInCellInset = new Point(0.5, auto.ActualHeight / 2);
+            Check(!new Rect(autoFace.RenderSize).Contains(auto.TranslatePoint(pointInCellInset, autoFace))
+                && toolbar.TargetAt(auto.PointToScreen(pointInCellInset)) == DwellTarget.AutoClick
+                && !toolbar.IsMoveAreaAt(auto.PointToScreen(pointInCellInset)) && auto.InputHitTest(pointInCellInset) != null,
+                "the space beside the AutoClick face is part of its button for dwell and mouse input");
             Check(auto.Background == SoftKeyKeyDesign.AccentFace && power.Background == SoftKeyKeyDesign.FunctionFace
                 && leftIcon.Background == SoftKeyKeyDesign.LetterFace
                 && liveGrid.Children.OfType<DragKeyButton>().Where(button => button.IsVisible).All(button =>
@@ -2588,13 +2599,18 @@ static class StartupChecks
                 "right drag holds and releases only the right mouse button, including a retried release");
             events.Clear();
             Call(keyboard, "PerformDwell", DwellTarget.RightClick);
+            var dragStatus = Field<TextBlock>(keyboard, "dragKeyStatus");
+            Check(dragStatus.Visibility == Visibility.Visible && dragStatus.Text == "Högerklick valt",
+                "a selected click mode appears in the keyboard status row");
             Call(keyboard, "PerformDwell", DwellTarget.External);
             Check(events.SequenceEqual(new[] { "right click" }) && !mouse.IsDragging,
                 "ordinary right click still uses its single-click action");
+            Check(dragStatus.Visibility == Visibility.Collapsed, "the click mode disappears after the single click");
             events.Clear();
 
             leftIcon.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Call(keyboard, "PerformDwell", DwellTarget.External);
+            Check(dragStatus.Text == "Drag pågår · vila för att släppa", "the status row shows how to release an active drag");
             Call(keyboard, "PerformDwell", DwellTarget.DragDrop);
             Check(events.SequenceEqual(new[] { "left down", "left up" }), "left drag uses only the left mouse button");
             events.Clear();
@@ -3599,6 +3615,8 @@ static class StartupChecks
         try
         {
             ShowOffscreen(list); Render(list, Path.Combine(output, "dialog-word-list.png"));
+            var searchButton = Field<Button>(list, "searchButton");
+            Check(searchButton.ActualWidth >= 40 && searchButton.ActualHeight >= 40, "word-list search has a 40-DIP target");
             Field<TextBox>(list, "wordInput").Text = "nyttord";
             Field<Button>(list, "add").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Check(words.Contains("nyttord") && Field<TextBox>(list, "wordInput").Text == "", "adding a word still works after the word-list layout change");
@@ -3653,22 +3671,41 @@ static class StartupChecks
                 var preview = new SoftKeyUpdates.Preview(42, new string('a', 40), "2026-11-27T12:00:00Z",
                     "• Tydligare tangenttext och smidigare storleksändring.\n• Uppdaterad menyindikator och ny uppdateringsdialog.",
                     new SoftKeyUpdates.Asset(42, "SoftKey-update-42.zip", "uploaded", 1784688, "sha256:" + new string('a', 64)));
-                typeof(KeyboardWindow).GetField("availableUpdate", Fields).SetValue(keyboard, preview);
-                typeof(KeyboardWindow).GetMethod("RefreshUpdateIndicator", Fields).Invoke(keyboard, null);
+                var pending = new TaskCompletionSource<SoftKeyUpdates.Preview>();
+                int requests = 0;
+                var suspended = typeof(KeyboardWindow).GetField("desktopSessionSuspended", Fields);
+                suspended.SetValue(keyboard, true);
+                keyboard.EnableUpdateChecks(_ => ++requests == 1
+                    ? Task.FromException<SoftKeyUpdates.Preview>(new IOException("offline"))
+                    : pending.Task);
+                var timer = Field<DispatcherTimer>(keyboard, "updateTimer");
+                Check(!timer.IsEnabled && requests == 0, "a suspended launch defers the initial update check");
+                suspended.SetValue(keyboard, false);
+                Call(keyboard, "ResumeUpdateChecks");
+                Check(timer.IsEnabled && timer.Interval == TimeSpan.FromSeconds(2),
+                    "resuming schedules the initial background check");
+                timer.Interval = TimeSpan.FromMilliseconds(1);
+                Pump();
+                Check(requests == 1 && timer.IsEnabled && timer.Interval == TimeSpan.FromMinutes(2),
+                    "a failed background check schedules a quick retry");
+                var arkivItems = (StackPanel)Call(keyboard, "BuildMenuPanel", 0);
+                typeof(KeyboardWindow).GetField("openMenu", Fields).SetValue(keyboard, 0);
+                var updateMenuItem = (Button)arkivItems.Children[0];
+                var badge = ((DockPanel)updateMenuItem.Content).Children.OfType<Border>().Single();
+                Check(badge.Visibility == Visibility.Collapsed, "Arkiv initially has no update badge");
+                timer.Interval = TimeSpan.FromMilliseconds(1);
+                Pump();
+                Check(requests == 2 && !timer.IsEnabled, "the retry runs in the background without opening the update dialog");
+                pending.SetResult(preview);
                 Pump();
                 Check(indicator.Visibility == Visibility.Visible && indicator.Background == SoftKeyKeyDesign.SlateAccent
                     && Math.Abs(headers[0].ActualWidth - arkivWidthWithoutUpdate) <= 0.5,
                     "Arkiv displays the corner status dot without shifting the menu bar");
-                var arkivItems = (StackPanel)typeof(KeyboardWindow).GetMethod("BuildMenuPanel", Fields).Invoke(keyboard, new object[] { 0 });
-                var updateMenuItem = (Button)arkivItems.Children[0];
-                Check(updateMenuItem.Content is DockPanel row
-                    && row.Children.OfType<Border>().Any(badge => badge.Child is TextBlock text && text.Text == "Ny"),
-                    "Arkiv dropdown highlights Uppdatering with a subtle Ny badge");
+                Check(badge.Visibility == Visibility.Visible && badge.Child is TextBlock { Text: "Ny" }
+                    && timer.IsEnabled && timer.Interval == TimeSpan.FromMinutes(15),
+                    "the existing Arkiv row gains the Ny badge and the regular polling interval resumes");
                 Render(menu, Path.Combine(output, "update-menu-available.png"));
-                typeof(KeyboardWindow).GetField("openMenu", Fields).SetValue(keyboard, 0);
-                typeof(KeyboardWindow).GetMethod("RefreshTopBar", Fields).Invoke(keyboard, null);
-                Check(indicator.Visibility == Visibility.Collapsed,
-                    "Arkiv hides the corner dot while its dropdown menu is open");
+                Call(keyboard, "CloseMenu");
             }
             finally { keyboard.EnablePreviewClose(); keyboard.Close(); }
 

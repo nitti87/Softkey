@@ -152,6 +152,12 @@ partial class KeyboardWindow
         dragKeyWin?.Refresh(cfg.AutoClick, mouseActions.Selected,
             mouseActions.IsDragging, !mainWindowActionsLocked, draggedWindow?.Title, windowResizeEdges != WindowResizeEdges.None,
             keyboardHidden || WindowState == WindowState.Minimized, KeyboardHeaderHidden);
+        if (dragKeyStatus != null)
+        {
+            string status = dragKeyWin?.StatusText;
+            dragKeyStatus.Text = status ?? "";
+            dragKeyStatus.Visibility = status == null ? Visibility.Collapsed : Visibility.Visible;
+        }
     }
 
     bool CancelMouseAction() => CancelMouseActionCore(true);

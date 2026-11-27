@@ -4,18 +4,25 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Data;
 using System.Windows.Media;
 
-enum DragKeySymbol { AutoClick, RightClick, DoubleClick, LeftDrag, MiddleDrag, Keyboard, WindowHeader, Undock, RightDrag, Power, KeyboardToTop, KeyboardToBottom }
+enum DragKeySymbol { AutoClick, RightClick, DoubleClick, LeftDrag, MiddleDrag, Keyboard, WindowHeader, Undock, RightDrag, Power, KeyboardToTop, KeyboardToBottom, AutoClickPaused }
 
 // Compact vector-only buttons; names and state remain available to assistive tools.
 sealed class DragKeyButton : Button
 {
     static readonly ControlTemplate ButtonTemplate = CreateTemplate();
     static readonly ScaleTransform SmallIconScale = new(0.85, 0.85);
+    static readonly DependencyProperty FaceInsetProperty = DependencyProperty.Register(
+        nameof(FaceInset), typeof(Thickness), typeof(DragKeyButton), new PropertyMetadata(new Thickness()));
+    readonly bool signIn;
+    DragKeySymbol symbol;
+    public Thickness FaceInset => (Thickness)GetValue(FaceInsetProperty);
     public Brush RestingFace { get; }
 
     public DragKeyButton(string label, DragKeySymbol symbol, bool signIn = false)
     {
-        DragKeySize.Normal.FitCell(this, vertical: false);
+        this.symbol = symbol;
+        this.signIn = signIn;
+        FitTarget(DragKeySize.Normal, vertical: false);
         Padding = signIn ? new Thickness(3) : new Thickness(0);
         BorderThickness = new Thickness(1);
         Focusable = false;
@@ -66,16 +73,32 @@ sealed class DragKeyButton : Button
         icon.Child.InvalidateVisual();
     }
 
+    public void FitTarget(DragKeySize size, bool vertical)
+    {
+        size.FitCell(this, vertical);
+        if (signIn || symbol is not (DragKeySymbol.AutoClick or DragKeySymbol.AutoClickPaused
+            or DragKeySymbol.RightClick or DragKeySymbol.DoubleClick or DragKeySymbol.LeftDrag
+            or DragKeySymbol.RightDrag or DragKeySymbol.MiddleDrag)) return;
+
+        // Use the whole cell for input and keep the visible face at its original size.
+        var inset = Margin;
+        SetValue(FaceInsetProperty, inset);
+        Height += inset.Top + inset.Bottom;
+        Margin = new Thickness();
+    }
+
     public void ChangeSymbol(DragKeySymbol symbol)
     {
-        var artwork = CreateSymbol(symbol, followsButtonState: true);
+        if (this.symbol == symbol) return;
+        this.symbol = symbol;
+        var artwork = CreateSymbol(symbol, followsButtonState: true, signIn: signIn);
         artwork.LayoutTransform = ((Viewbox)Content).LayoutTransform;
         Content = artwork;
     }
 
     public static Brush FaceFor(DragKeySymbol symbol) => symbol switch
     {
-        DragKeySymbol.AutoClick => SoftKeyKeyDesign.AccentFace,
+        DragKeySymbol.AutoClick or DragKeySymbol.AutoClickPaused => SoftKeyKeyDesign.AccentFace,
         DragKeySymbol.RightClick or DragKeySymbol.DoubleClick or DragKeySymbol.LeftDrag
             or DragKeySymbol.RightDrag or DragKeySymbol.MiddleDrag => SoftKeyKeyDesign.LetterFace,
         _ => SoftKeyKeyDesign.FunctionFace
@@ -106,7 +129,15 @@ sealed class DragKeyButton : Button
         content.SetBinding(MarginProperty, new Binding(nameof(Padding)) { RelativeSource = RelativeSource.TemplatedParent });
         face.AppendChild(content);
         border.AppendChild(face);
-        template.VisualTree = SoftKeyKeyDesign.Raised(border, shadowRadius: new CornerRadius(0));
+        var faceWithShadow = SoftKeyKeyDesign.Raised(border, shadowRadius: new CornerRadius(0));
+        faceWithShadow.SetBinding(FrameworkElement.MarginProperty, new Binding(nameof(FaceInset))
+        {
+            RelativeSource = RelativeSource.TemplatedParent
+        });
+        var target = new FrameworkElementFactory(typeof(Border));
+        target.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+        target.AppendChild(faceWithShadow);
+        template.VisualTree = target;
         template.Triggers.Add(PointerState(IsMouseOverProperty, 0.14));
         template.Triggers.Add(PointerState(ButtonBase.IsPressedProperty, 0.24));
         return template;

@@ -32,6 +32,8 @@ partial class KeyboardWindow
     Border wordMenuAnchor;
     Border menuPanel;
     Border updateIndicator;
+    Border updateMenuBadge;
+    Button updateMenuAction;
     Popup menuPopup;
     int openMenu = -1;
     IntPtr outsideClickHook;
@@ -133,9 +135,14 @@ partial class KeyboardWindow
     {
         if (updateIndicator == null) return;
         bool available = availableUpdate != null;
-        updateIndicator.Visibility = available && openMenu != 0 ? Visibility.Visible : Visibility.Collapsed;
+        updateIndicator.Visibility = available ? Visibility.Visible : Visibility.Collapsed;
         menuHeaders[0].ToolTip = available ? "En SoftKey-uppdatering är tillgänglig" : null;
         AutomationProperties.SetName(menuHeaders[0], available ? "Arkiv, uppdatering tillgänglig" : "Arkiv");
+        if (updateMenuBadge != null)
+        {
+            updateMenuBadge.Visibility = updateIndicator.Visibility;
+            AutomationProperties.SetName(updateMenuAction, available ? "Uppdatering…, ny uppdatering tillgänglig" : "Uppdatering…");
+        }
     }
 
     void RefreshTopBar()
@@ -230,6 +237,8 @@ partial class KeyboardWindow
         menuPopup.IsOpen = false;
         menuPanel.Visibility = Visibility.Collapsed;
         menuPanel.Child = null;
+        updateMenuBadge = null;
+        updateMenuAction = null;
         menuTextControls.Clear();
         RefreshTopBar();
     }
@@ -245,20 +254,19 @@ partial class KeyboardWindow
     UIElement BuildMenuPanel(int index)
     {
         var items = new StackPanel();
+        updateMenuBadge = null;
+        updateMenuAction = null;
         if (index == 0)
         {
-            var updateItem = MenuAction("Uppdatering…", OpenUpdateSettings);
-            if (availableUpdate != null)
+            updateMenuAction = MenuAction("Uppdatering…", OpenUpdateSettings);
+            updateMenuBadge = CreateNewMenuBadge();
+            DockPanel.SetDock(updateMenuBadge, Dock.Right);
+            updateMenuAction.Content = new DockPanel
             {
-                var badge = CreateNewMenuBadge();
-                DockPanel.SetDock(badge, Dock.Right);
-                var row = new DockPanel { LastChildFill = true };
-                row.Children.Add(badge);
-                row.Children.Add(new TextBlock { Text = "Uppdatering…", VerticalAlignment = VerticalAlignment.Center });
-                updateItem.Content = row;
-                AutomationProperties.SetName(updateItem, "Uppdatering…, ny uppdatering tillgänglig");
-            }
-            items.Children.Add(updateItem);
+                Children = { updateMenuBadge, new TextBlock { Text = "Uppdatering…", VerticalAlignment = VerticalAlignment.Center } }
+            };
+            RefreshUpdateIndicator();
+            items.Children.Add(updateMenuAction);
             items.Children.Add(MenuAction("Startup…", OpenStartupSettings));
             items.Children.Add(MenuSeparator());
             items.Children.Add(MenuAction("Avsluta", Close));

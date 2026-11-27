@@ -12,6 +12,7 @@ using System.Windows.Threading;
 
 class WordListWindow : Window
 {
+    const double PreferredBodyHeight = 418;
     static readonly Brush MutedText = SoftKeyPopupDesign.SecondaryText;
     static readonly Brush Accent = SoftKeyPopupDesign.Accent;
     readonly Func<IEnumerable<string>> getWords;
@@ -53,7 +54,7 @@ class WordListWindow : Window
         buttonStyle.Triggers.Add(disabled);
         Resources.Add(typeof(Button), buttonStyle);
 
-        var body = new Grid { Height = 406 };
+        var body = new Grid { Height = PreferredBodyHeight };
         body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         body.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -91,8 +92,8 @@ class WordListWindow : Window
             StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
             StrokeLineJoin = PenLineJoin.Round, Width = 16, Height = 16
         };
-        searchButton.Width = 30;
-        searchButton.Height = 28;
+        searchButton.Width = 40;
+        searchButton.Height = 40;
         searchButton.Margin = new Thickness(0);
         searchButton.Padding = new Thickness(5);
         searchButton.Focusable = false;
@@ -238,7 +239,7 @@ class WordListWindow : Window
             frame.Measure(new Size(available.Width, double.PositiveInfinity));
             // The tabbed window adds its headers to the same frame before it opens.
             double surroundingHeight = frame.DesiredSize.Height - body.DesiredSize.Height;
-            body.Height = Math.Clamp(available.Height - surroundingHeight, 240, 406);
+            body.Height = Math.Clamp(available.Height - surroundingHeight, 240, PreferredBodyHeight);
         });
         PreviewKeyDown += (_, e) =>
         {

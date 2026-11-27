@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -42,6 +43,7 @@ partial class KeyboardWindow : Window
     readonly DispatcherTimer topmostTimer = new(DispatcherPriority.Input) { Interval = TimeSpan.FromMilliseconds(250) };
     readonly DispatcherTimer dwellTimer = new() { Interval = TimeSpan.FromMilliseconds(40) };
     TextBlock statusText;
+    TextBlock dragKeyStatus;
     TextBlock modifierStatus;
     ScrollViewer suggestionViewport;
     Image emptySuggestionsIcon;
@@ -489,6 +491,7 @@ partial class KeyboardWindow : Window
             else b.FontSize = fs;
         }
         statusText.FontSize = Math.Min(StatusFontSize, fs);
+        if (dragKeyStatus != null) dragKeyStatus.FontSize = statusText.FontSize;
         ScaleMenuText(fs);
     }
 
@@ -520,12 +523,22 @@ partial class KeyboardWindow : Window
         if (!secureMode)
         {
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            dragKeyStatus = new TextBlock
+            {
+                Foreground = SoftKeyKeyDesign.SlateAccentText, FontSize = StatusFontSize, FontWeight = FontWeights.SemiBold,
+                VerticalAlignment = VerticalAlignment.Center, TextTrimming = TextTrimming.CharacterEllipsis, MaxWidth = 185,
+                Margin = new Thickness(0, 0, 8, 0), Visibility = Visibility.Collapsed, IsHitTestVisible = false
+            };
+            AutomationProperties.SetLiveSetting(dragKeyStatus, AutomationLiveSetting.Polite);
+            Grid.SetColumn(dragKeyStatus, 1);
+            row.Children.Add(dragKeyStatus);
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             modifierStatus = new TextBlock
             {
                 Foreground = SoftKeyKeyDesign.SlateAccent, FontSize = StatusFontSize,
                 FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center
             };
-            Grid.SetColumn(modifierStatus, 1);
+            Grid.SetColumn(modifierStatus, 2);
             row.Children.Add(modifierStatus);
         }
         return new Border

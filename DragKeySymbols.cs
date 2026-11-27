@@ -55,6 +55,11 @@ static class DragKeySymbols
                         cardSurface, Line(ink, compact ? 2.0 : 1.65));
                     break;
 
+                case DragKeySymbol.AutoClickPaused:
+                    drawing.DrawEllipse(null, Line(ink, compact ? 2.2 : 1.8), new Point(14, 14), 10.5, 10.5);
+                    Path("M 11,9 V 19 M 17,9 V 19", stroke: Line(accent, compact ? 3.2 : 2.7));
+                    break;
+
                 case DragKeySymbol.Keyboard:
                     drawing.DrawRoundedRectangle(softSurface, outline, new Rect(2.5, 6.1, 23, 15.8), 3, 3);
                     int columns = compact ? 4 : 5;

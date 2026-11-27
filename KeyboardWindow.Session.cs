@@ -70,6 +70,7 @@ partial class KeyboardWindow
         dwellTracker.Reset();
         RefreshDragKey();
         UpdateDwellTimer();
+        ResumeUpdateChecks();
         SuppressCurrentDwell();
         desktopStartupDisplay?.Observe(true);
     }

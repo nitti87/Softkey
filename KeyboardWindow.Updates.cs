@@ -7,41 +7,84 @@ using System.Windows.Threading;
 
 partial class KeyboardWindow
 {
+    static readonly TimeSpan InitialUpdateDelay = TimeSpan.FromSeconds(2);
+    static readonly TimeSpan UpdateRetryDelay = TimeSpan.FromMinutes(2);
+    static readonly TimeSpan UpdateCheckInterval = TimeSpan.FromMinutes(15);
     readonly CancellationTokenSource updateCancellation = new();
+    Func<CancellationToken, Task<SoftKeyUpdates.Preview>> fetchUpdate;
     DispatcherTimer updateTimer;
+    bool updateCheckDeferred;
     SoftKeyUpdateWindow updateWindow;
     SoftKeyUpdates.Preview availableUpdate;
     Task<SoftKeyUpdates.Preview> pendingUpdateCheck;
 
-    internal void EnableUpdateChecks()
+    internal void EnableUpdateChecks(Func<CancellationToken, Task<SoftKeyUpdates.Preview>> fetch = null)
     {
-        if (secureMode || !SoftKeyUpdates.CanInstall) return;
-        updateTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromSeconds(12) };
-        updateTimer.Tick += async (_, _) =>
-        {
-            updateTimer.Interval = TimeSpan.FromHours(1);
-            if (desktopSessionSuspended) return;
-            try { await CheckForUpdateAsync(); }
-            catch (Exception ex) { Trace.TraceWarning("SoftKey update check failed ({0}).", ex.GetType().Name); }
-        };
+        if (secureMode || updateTimer != null || (fetch == null && !SoftKeyUpdates.CanInstall)) return;
+        fetchUpdate = fetch ?? SoftKeyUpdates.CheckAsync;
+        updateTimer = new DispatcherTimer(DispatcherPriority.Background);
+        updateTimer.Tick += CheckForUpdateOnTimer;
         Closed += (_, _) =>
         {
             updateTimer.Stop();
+            updateTimer.Tick -= CheckForUpdateOnTimer;
             updateCancellation.Cancel();
             updateCancellation.Dispose();
         };
+        ScheduleUpdateCheck(InitialUpdateDelay);
+    }
+
+    void ScheduleUpdateCheck(TimeSpan delay)
+    {
+        updateCheckDeferred = desktopSessionSuspended;
+        if (updateCheckDeferred) return;
+        updateTimer.Interval = delay;
         updateTimer.Start();
     }
 
-    async Task<SoftKeyUpdates.Preview> CheckForUpdateAsync()
+    void ResumeUpdateChecks()
     {
-        if (pendingUpdateCheck?.IsCompleted != false)
-            pendingUpdateCheck = SoftKeyUpdates.CheckAsync(updateCancellation.Token);
-        var preview = await pendingUpdateCheck;
-        availableUpdate = preview;
-        RefreshUpdateIndicator();
-        updateWindow?.SetAvailable(preview);
-        return preview;
+        if (updateCheckDeferred) ScheduleUpdateCheck(InitialUpdateDelay);
+    }
+
+    async void CheckForUpdateOnTimer(object sender, EventArgs e)
+    {
+        updateTimer.Stop();
+        if (desktopSessionSuspended)
+        {
+            updateCheckDeferred = true;
+            return;
+        }
+        try { await CheckForUpdateAsync(); }
+        catch (OperationCanceledException) when (updateCancellation.IsCancellationRequested) { }
+        catch (Exception ex) { Trace.TraceWarning("SoftKey update check failed ({0}).", ex.GetType().Name); }
+    }
+
+    Task<SoftKeyUpdates.Preview> CheckForUpdateAsync()
+    {
+        if (pendingUpdateCheck?.IsCompleted == false) return pendingUpdateCheck;
+        updateTimer?.Stop();
+        return pendingUpdateCheck = FetchAndDisplayUpdateAsync();
+    }
+
+    async Task<SoftKeyUpdates.Preview> FetchAndDisplayUpdateAsync()
+    {
+        var cancel = updateCancellation.Token;
+        var next = UpdateRetryDelay;
+        try
+        {
+            var preview = await (fetchUpdate ?? SoftKeyUpdates.CheckAsync)(cancel);
+            cancel.ThrowIfCancellationRequested();
+            availableUpdate = preview;
+            RefreshUpdateIndicator();
+            updateWindow?.SetAvailable(preview);
+            next = UpdateCheckInterval;
+            return preview;
+        }
+        finally
+        {
+            if (!cancel.IsCancellationRequested && updateTimer != null) ScheduleUpdateCheck(next);
+        }
     }
 
     void OpenUpdateSettings()

@@ -32,6 +32,12 @@ sealed class DragKeyWindow : Window
         Width = 5, Height = 5, Margin = new Thickness(0, 0, 5, 0),
         VerticalAlignment = VerticalAlignment.Center
     };
+    readonly TextBlock hiddenKeyboardStatus = new()
+    {
+        FontSize = 10, FontWeight = FontWeights.SemiBold, Foreground = SoftKeyKeyDesign.SlateAccentText,
+        Margin = new Thickness(10, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
+        TextTrimming = TextTrimming.CharacterEllipsis, Visibility = Visibility.Collapsed
+    };
     bool allowClose;
     readonly bool autoClickOnly;
     bool compactSignIn;
@@ -47,6 +53,7 @@ sealed class DragKeyWindow : Window
     string KeyboardMoveLabel => keyboardMovesToTop ? KeyboardToTopLabel : KeyboardToBottomLabel;
     Point? backgroundPress;
     public FrameworkElement Surface { get; }
+    public string StatusText { get; private set; }
     public Action<Point> MoveTitle { get; set; }
     public Action<Rect> MovingBounds { get; set; }
     public Action<Point> FloatFromBackground { get; set; }
@@ -74,9 +81,13 @@ sealed class DragKeyWindow : Window
         var titleContent = new Grid();
         titleContent.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         titleContent.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var titleLabel = new StackPanel { Orientation = Orientation.Horizontal };
+        var titleLabel = new DockPanel();
         titleLabel.Children.Add(stateDot);
-        titleLabel.Children.Add(new TextBlock { Text = DisplayName, FontSize = 10, FontWeight = FontWeights.SemiBold });
+        titleLabel.Children.Add(new TextBlock
+        {
+            Text = DisplayName, FontSize = 10, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center
+        });
+        titleLabel.Children.Add(hiddenKeyboardStatus);
         titleContent.Children.Add(titleLabel);
         grip = new UniformGrid { Columns = 2, Rows = 3, Width = 8, Height = 10, Margin = new Thickness(12, 0, 0, 0) };
         for (int i = 0; i < 6; i++) grip.Children.Add(new System.Windows.Shapes.Ellipse
@@ -225,6 +236,7 @@ sealed class DragKeyWindow : Window
         bool resizing = false, bool keyboardHidden = false, bool headerHidden = false)
     {
         System.Windows.Automation.AutomationProperties.SetItemStatus(autoClick, enabled ? "På" : "Av");
+        autoClick.ChangeSymbol(enabled ? DragKeySymbol.AutoClick : DragKeySymbol.AutoClickPaused);
         autoClick.Foreground = SoftKeyKeyDesign.SlateAccentText;
         autoClick.Background = enabled ? autoClick.RestingFace : SoftKeyKeyDesign.LetterFace;
         autoClick.BorderBrush = enabled ? SoftKeyKeyDesign.Outline : Brush(0xC6, 0xC2, 0xB8);
@@ -262,6 +274,19 @@ sealed class DragKeyWindow : Window
             : "Vila med pekaren för att vänsterklicka.";
         System.Windows.Automation.AutomationProperties.SetHelpText(this, description);
         System.Windows.Automation.AutomationProperties.SetHelpText(Surface, description);
+        StatusText = autoClickOnly ? null : !enabled ? "Autoklick pausat" : resizing ? "Ändrar storlek"
+            : movingWindow != null ? "Flyttar · vila för att släppa" : dragging ? "Drag pågår · vila för att släppa"
+            : !actionsAvailable ? null : selected switch
+            {
+                MouseAction.Right => "Högerklick valt",
+                MouseAction.Double => "Dubbelklick valt",
+                MouseAction.Drag => LeftDragLabel + " valt",
+                MouseAction.RightDrag => RightDragLabel + " valt",
+                MouseAction.MiddleDrag => MiddleDragLabel + " valt",
+                _ => null
+            };
+        hiddenKeyboardStatus.Text = StatusText ?? "";
+        hiddenKeyboardStatus.Visibility = keyboardHidden && StatusText != null ? Visibility.Visible : Visibility.Collapsed;
         stateDot.Fill = !enabled ? Brush(0x94, 0x8F, 0x86)
             : dragging ? Brush(0x9C, 0x5D, 0x2D)
             : selected != MouseAction.Left ? Brush(0xA1, 0x7C, 0x32) : SoftKeyKeyDesign.SlateAccent;
@@ -400,7 +425,7 @@ sealed class DragKeyWindow : Window
     void FitButtons()
     {
         foreach (DragKeyButton button in buttons.Children)
-            size.FitCell(button, dockedVertically);
+            button.FitTarget(size, dockedVertically);
     }
 
     static void RefreshDragButton(DragKeyButton button, string label, bool selected, bool dragging, bool enabled, bool actionsAvailable)
