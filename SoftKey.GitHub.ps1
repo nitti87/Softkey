@@ -6,6 +6,57 @@
     throw 'Git for Windows with Git Credential Manager is required on the SoftKey development computer.'
 }
 
+function Get-SoftKeyWindowsCredentialPassword {
+    param([string]$TargetName, [string]$ExpectedUser)
+
+    if (-not ('SoftKeyWinCred' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+
+public static class SoftKeyWinCred
+{
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    struct CREDENTIAL
+    {
+        public uint Flags, Type;
+        public string TargetName, Comment;
+        public System.Runtime.InteropServices.ComTypes.FILETIME LastWritten;
+        public uint CredentialBlobSize;
+        public IntPtr CredentialBlob;
+        public uint Persist, AttributeCount;
+        public IntPtr Attributes;
+        public string TargetAlias, UserName;
+    }
+
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool CredRead(string target, uint type, uint flags, out IntPtr credential);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    static extern void CredFree(IntPtr buffer);
+
+    public static string ReadGeneric(string target, string expectedUser)
+    {
+        IntPtr ptr;
+        if (!CredRead(target, 1, 0, out ptr)) return null;
+        try
+        {
+            CREDENTIAL cred = (CREDENTIAL)Marshal.PtrToStructure(ptr, typeof(CREDENTIAL));
+            if (!string.Equals(cred.UserName, expectedUser, StringComparison.OrdinalIgnoreCase)) return null;
+            if (cred.CredentialBlob == IntPtr.Zero || cred.CredentialBlobSize < 2 || (cred.CredentialBlobSize % 2) != 0) return null;
+            return Marshal.PtrToStringUni(cred.CredentialBlob, (int)(cred.CredentialBlobSize / 2));
+        }
+        finally
+        {
+            CredFree(ptr);
+        }
+    }
+}
+'@
+    }
+    return [SoftKeyWinCred]::ReadGeneric($TargetName, $ExpectedUser)
+}
+
 function Get-SoftKeyStoredGitHubToken {
     param([string]$GitPath)
 
@@ -20,6 +71,10 @@ function Get-SoftKeyStoredGitHubToken {
         foreach ($line in $credential) {
             if ($line -cmatch '^password=(.+)$') { return $Matches[1] }
         }
+    }
+    if ($GitPath -and [IO.File]::Exists($GitPath)) {
+        $stored = Get-SoftKeyWindowsCredentialPassword -TargetName 'git:https://github.com' -ExpectedUser 'nitti87'
+        if ($stored) { return $stored }
     }
 }
 
