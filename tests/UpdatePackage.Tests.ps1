@@ -96,6 +96,15 @@ function Assert-UpdateRejected([scriptblock]$Check, [string]$Message) {
         if ($singleNotes -cne '• Smidigare uppdateringsflöde') {
             throw "Unexpected single-commit release notes: $singleNotes"
         }
+        [IO.File]::WriteAllText((Join-Path $tmpRepo 'a.txt'), '4')
+        $null = & $gitExe -C $tmpRepo add a.txt
+        $null = & $gitExe -C $tmpRepo -c user.name=Test -c user.email=test@example.invalid commit --quiet `
+            -m 'Tydligare uppdateringsdialog' -m "Visar kategorier och bevarade inställningar.`n`nCo-authored-by: Test <test@example.invalid>"
+        $bodyCommit = (& $gitExe -C $tmpRepo rev-parse HEAD).Trim()
+        $bodyNotes = Get-SoftKeyDeliveryReleaseNotes -GitPath $gitExe -RepositoryPath $tmpRepo -HeadCommit $bodyCommit -PreviousCommit $headCommit
+        if ($bodyNotes -cne "• Tydligare uppdateringsdialog`n  Visar kategorier och bevarade inställningar.") {
+            throw "Unexpected detailed release notes: $bodyNotes"
+        }
         if ($null -ne (Get-SoftKeyDeliveryReleaseNotes -GitPath $gitExe -RepositoryPath $tmpRepo -HeadCommit 'not-a-sha' -PreviousCommit $baseCommit)) {
             throw 'Invalid commit hash must return null.'
         }

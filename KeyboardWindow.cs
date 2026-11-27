@@ -608,12 +608,13 @@ partial class KeyboardWindow : Window
     void RefreshModifierStatus()
     {
         if (modifierStatus == null) return;
-        var active = new List<string>(5);
+        var active = new List<string>(6);
         bool Active(string label) => held.Any(k => k.Label == label)
             || (mouseWin != null && btn.Keys.Any(k => k.Label == label && mouseWin.IsChordModifierSelected(k)));
         if (Active("Sft")) active.Add("Shift");
         if (Active("Alt")) active.Add("Alt");
         if (Active("Ctl")) active.Add("Ctrl");
+        if (Active("Win")) active.Add("Win");
         if (capsLockOn) active.Add("Caps Lock");
         if (Active("AltGr")) active.Add("AltGr");
         modifierStatus.Text = string.Join("  ·  ", active);

@@ -3,7 +3,7 @@
 ## Uppdatera från SoftKey
 
 1. När den installerade skrivbordsappen startar kontrollerar SoftKey versionsinformationen på offentliga GitHub Releases efter cirka tolv sekunder och sedan ungefär en gång i timmen. Kontrollen använder varken konto eller token.
-2. En diskret blå pil visas vid **Arkiv** när en nyare version finns. Öppna **Arkiv → Uppdatering** för att se versionsnummer, publiceringsdatum, paketstorlek och versionsanteckningar. Om ingen version visas kan du välja **Sök efter uppdateringar** i dialogen.
+2. En diskret blå statuspunkt visas vid **Arkiv** när en nyare version finns (och märkningen **Ny** visas vid **Uppdatering…** inne i menyn). Öppna **Arkiv → Uppdatering…** för att se versionssteg, publiceringsdatum, paketstorlek, signaturstatus och kategoriserade versionsanteckningar. Om ingen version visas kan du välja **Sök efter uppdateringar** i dialogen.
 3. Välj **Installera uppdateringen** när du vill fortsätta. Först då börjar hämtningen av ZIP-paketet. Förloppsrutan visar paketnamn och hämtad storlek, följt av signaturkontrollen.
 4. Godkänn installationen när Windows frågar. SoftKey sparar skrivbordsinställningarna och stänger tangentbordet så att programfilerna kan bytas. Förloppsrutan ligger kvar och visar aktuell fil och antal filer. Installationsprogrammet verifierar den nya versionen och öppnar SoftKey igen.
 
@@ -43,7 +43,7 @@ Om byggdatorns GitHub-inloggning har återkallats kan samma Windows-användare f
 
 | Vad du ser | Vad du kontrollerar |
 |---|---|
-| Ingen pil vid **Arkiv** | Öppna **Arkiv → Uppdatering** och sök igen. Kontrollera anslutningen och att GitHub har en publicerad förhandsversion med högre byggnummer och rätt ZIP-fil. |
+| Ingen statuspunkt vid **Arkiv** | Öppna **Arkiv → Uppdatering…** och sök igen. Kontrollera anslutningen och att GitHub har en publicerad förhandsversion med högre byggnummer och rätt ZIP-fil. |
 | **Installera uppdateringen** är inaktiv | Öppna den installerade skrivbordsappen. En lokal förhandsvisning kan visa versionsinformationen. |
 | Hämtningen eller verifieringen misslyckas | Försök igen från dialogen. Kontrollera på byggdatorn att rätt signerat paket ligger på rätt release. |
 | Windows avbryter installationen | Starta om uppdateringen från skrivbordsappen och godkänn Windows dialog när den visas. |
@@ -54,7 +54,7 @@ Om byggdatorns GitHub-inloggning har återkallats kan samma Windows-användare f
 | Del | Kod |
 |---|---|
 | Schemalagd sökning, ikon och menyval | [KeyboardWindow.Updates.cs](KeyboardWindow.Updates.cs), [KeyboardWindow.Menu.cs](KeyboardWindow.Menu.cs) |
-| Versionsdialog, förlopp och omstart | [SoftKeyUpdateWindow.cs](SoftKeyUpdateWindow.cs), [SoftKeyUpdateProgressView.cs](SoftKeyUpdateProgressView.cs), [SoftKeyUpdates.cs](SoftKeyUpdates.cs) |
+| Versionsdialog, anteckningsformat, förlopp och omstart | [SoftKeyUpdateWindow.cs](SoftKeyUpdateWindow.cs), [SoftKeyReleaseNotes.cs](SoftKeyReleaseNotes.cs), [SoftKeyUpdateProgressView.cs](SoftKeyUpdateProgressView.cs), [SoftKeyUpdates.cs](SoftKeyUpdates.cs) |
 | Signaturkontroll och inbyggd installation i C# | [SoftKeyUpdateArchive.cs](SoftKeyUpdateArchive.cs), [SoftKeyUpdateInstaller.cs](SoftKeyUpdateInstaller.cs) |
 | Paketering och publicering på byggdatorn | [SoftKey.UpdateDistribution.ps1](SoftKey.UpdateDistribution.ps1), [SoftKey.UpdatePackage.ps1](SoftKey.UpdatePackage.ps1), [Start-SoftKeyDelivery.ps1](Start-SoftKeyDelivery.ps1) |
 

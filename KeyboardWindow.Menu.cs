@@ -23,7 +23,7 @@ partial class KeyboardWindow
     static readonly Brush ActiveMenuBorder = new SolidColorBrush(Color.FromRgb(0x70, 0xA8, 0xD2));
     static readonly Brush ActiveMenuText = new SolidColorBrush(Color.FromRgb(0x1F, 0x3B, 0x53));
     static readonly ControlTemplate MenuHeaderTemplate = KeyButtonTemplate(cornerRadius: 4);
-    static readonly ControlTemplate MenuActionTemplate = KeyButtonTemplate(HorizontalAlignment.Left, cornerRadius: 4);
+    static readonly ControlTemplate MenuActionTemplate = KeyButtonTemplate(HorizontalAlignment.Stretch, cornerRadius: 4);
 
     readonly Button[] menuHeaders = new Button[4];
     readonly List<Control> menuTextControls = new();
@@ -51,11 +51,14 @@ partial class KeyboardWindow
         menuHeaders[0] = MenuHeader("Arkiv", 0);
         if (!secureMode)
         {
-            updateIndicator = CreateUpdateBadge(size: 17, margin: new Thickness(6, 0, 0, 0));
-            menuHeaders[0].Content = new StackPanel
+            updateIndicator = CreateUpdateDot();
+            menuHeaders[0].Content = new Grid
             {
-                Orientation = Orientation.Horizontal,
-                Children = { new TextBlock { Text = "Arkiv", VerticalAlignment = VerticalAlignment.Center }, updateIndicator }
+                Children =
+                {
+                    new TextBlock { Text = "Arkiv", VerticalAlignment = VerticalAlignment.Center },
+                    updateIndicator
+                }
             };
             RefreshUpdateIndicator();
         }
@@ -98,17 +101,31 @@ partial class KeyboardWindow
         return menuLayer;
     }
 
-    static Border CreateUpdateBadge(double size, Thickness margin) => new()
+    static Border CreateUpdateDot()
     {
-        Width = size, Height = size, Margin = margin, CornerRadius = new CornerRadius(size / 2),
-        Background = Accent, VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false,
-        Child = new System.Windows.Shapes.Path
+        var dot = new Border
         {
-            Data = Geometry.Parse("M 2,5.5 L 5.5,2 L 9,5.5 M 5.5,2 L 5.5,9.5"),
-            Stroke = Brushes.White, StrokeThickness = 1.6, StrokeStartLineCap = PenLineCap.Round,
-            StrokeEndLineCap = PenLineCap.Round, StrokeLineJoin = PenLineJoin.Round,
-            Width = 11, Height = 11.5, Stretch = Stretch.Uniform,
-            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center
+            Width = 8.5, Height = 8.5, CornerRadius = new CornerRadius(4.25),
+            Background = Accent, BorderThickness = new Thickness(1.5),
+            HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(0, -1, -7, 0), IsHitTestVisible = false, SnapsToDevicePixels = true
+        };
+        dot.SetBinding(System.Windows.Controls.Border.BorderBrushProperty, new System.Windows.Data.Binding("Background")
+        {
+            RelativeSource = new System.Windows.Data.RelativeSource(System.Windows.Data.RelativeSourceMode.FindAncestor, typeof(Button), 1)
+        });
+        return dot;
+    }
+
+    static Border CreateNewMenuBadge() => new()
+    {
+        Background = ActionSurface, CornerRadius = new CornerRadius(6),
+        Padding = new Thickness(7, 1, 7, 2), Margin = new Thickness(12, 0, 0, 0),
+        VerticalAlignment = VerticalAlignment.Center, IsHitTestVisible = false,
+        Child = new TextBlock
+        {
+            Text = "Ny", FontSize = 11, FontWeight = FontWeights.SemiBold,
+            Foreground = ActionText, VerticalAlignment = VerticalAlignment.Center
         }
     };
 
@@ -116,7 +133,7 @@ partial class KeyboardWindow
     {
         if (updateIndicator == null) return;
         bool available = availableUpdate != null;
-        updateIndicator.Visibility = available ? Visibility.Visible : Visibility.Collapsed;
+        updateIndicator.Visibility = available && openMenu != 0 ? Visibility.Visible : Visibility.Collapsed;
         menuHeaders[0].ToolTip = available ? "En SoftKey-uppdatering är tillgänglig" : null;
         AutomationProperties.SetName(menuHeaders[0], available ? "Arkiv, uppdatering tillgänglig" : "Arkiv");
     }
@@ -132,6 +149,7 @@ partial class KeyboardWindow
                 : active ? ActiveMenuText : Brushes.Black;
             menuHeaders[i].BorderBrush = active ? ActiveMenuBorder : Brushes.Transparent;
         }
+        RefreshUpdateIndicator();
     }
 
     Button MenuHeader(string label, int index)
@@ -232,15 +250,12 @@ partial class KeyboardWindow
             var updateItem = MenuAction("Uppdatering…", OpenUpdateSettings);
             if (availableUpdate != null)
             {
-                updateItem.Content = new StackPanel
-                {
-                    Orientation = Orientation.Horizontal,
-                    Children =
-                    {
-                        new TextBlock { Text = "Uppdatering…", VerticalAlignment = VerticalAlignment.Center },
-                        CreateUpdateBadge(size: 16, margin: new Thickness(8, 0, 0, 0))
-                    }
-                };
+                var badge = CreateNewMenuBadge();
+                DockPanel.SetDock(badge, Dock.Right);
+                var row = new DockPanel { LastChildFill = true };
+                row.Children.Add(badge);
+                row.Children.Add(new TextBlock { Text = "Uppdatering…", VerticalAlignment = VerticalAlignment.Center });
+                updateItem.Content = row;
                 AutomationProperties.SetName(updateItem, "Uppdatering…, ny uppdatering tillgänglig");
             }
             items.Children.Add(updateItem);

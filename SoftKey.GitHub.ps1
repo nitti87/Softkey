@@ -67,14 +67,39 @@ function Invoke-SoftKeyGitUtf8 {
     }
 }
 
+function Get-SoftKeyCommitSummaryDetail {
+    param([string]$Body)
+
+    if ([string]::IsNullOrWhiteSpace($Body)) { return $null }
+    $parts = [Collections.Generic.List[string]]::new()
+    foreach ($line in ($Body -split "`r?`n")) {
+        $trimmed = $line.Trim()
+        if ($trimmed.Length -eq 0) {
+            if ($parts.Count -gt 0) { break }
+            continue
+        }
+        if ($trimmed -match '^(Co-authored-by|Signed-off-by|Reviewed-by|Change-Id):') { break }
+        if ($trimmed -match '^[•\-\*]\s+') { break }
+        $parts.Add($trimmed)
+    }
+    if ($parts.Count -eq 0) { return $null }
+    $detail = ($parts -join ' ')
+    if ($detail.Length -gt 220) { $detail = $detail.Substring(0, 217).TrimEnd() + '…' }
+    return $detail
+}
+
 function Format-SoftKeyDeliveryReleaseNotes {
-    param([string[]]$Subjects)
+    param([object[]]$Subjects)
 
     $lines = [Collections.Generic.List[string]]::new()
-    foreach ($subject in @($Subjects)) {
-        if ($null -eq $subject) { continue }
+    foreach ($item in @($Subjects)) {
+        if ($null -eq $item) { continue }
+        $subject = if ($item -is [string]) { $item } else { [string]$item.Subject }
+        $detail = if ($item -is [string]) { $null } else { Get-SoftKeyCommitSummaryDetail ([string]$item.Body) }
         $clean = $subject.Trim()
-        if ($clean.Length -gt 0) { $lines.Add('• ' + $clean) }
+        if ($clean.Length -eq 0) { continue }
+        if ($detail) { $lines.Add('• ' + $clean + "`n  " + $detail) }
+        else { $lines.Add('• ' + $clean) }
     }
     if ($lines.Count -eq 0) { return $null }
     $text = $lines -join "`n"
@@ -89,16 +114,25 @@ function Get-SoftKeyDeliveryReleaseNotes {
     $headCheck = Invoke-SoftKeyGitUtf8 -GitPath $GitPath -RepositoryPath $RepositoryPath -Arguments "rev-parse --quiet --verify ${HeadCommit}^{commit}"
     if ($headCheck.ExitCode -ne 0) { return $null }
 
-    $rangeArgs = "log -1 --format=%s $HeadCommit"
+    $format = '%s%x1f%b%x1e'
+    $rangeArgs = "log -1 --format=$format $HeadCommit"
     if ($PreviousCommit -and $PreviousCommit -cmatch '^[0-9a-f]{40}$' -and $PreviousCommit -cne $HeadCommit) {
         $ancestorCheck = Invoke-SoftKeyGitUtf8 -GitPath $GitPath -RepositoryPath $RepositoryPath -Arguments "merge-base --is-ancestor $PreviousCommit $HeadCommit"
         if ($ancestorCheck.ExitCode -eq 0) {
-            $rangeArgs = "log --no-merges --format=%s -n 15 ${PreviousCommit}..${HeadCommit}"
+            $rangeArgs = "log --no-merges --format=$format -n 15 ${PreviousCommit}..${HeadCommit}"
         }
     }
 
     $logResult = Invoke-SoftKeyGitUtf8 -GitPath $GitPath -RepositoryPath $RepositoryPath -Arguments $rangeArgs
     if ($logResult.ExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($logResult.Output)) { return $null }
-    $subjects = $logResult.Output -split "`r?`n"
-    return Format-SoftKeyDeliveryReleaseNotes -Subjects $subjects
+    $entries = [Collections.Generic.List[object]]::new()
+    foreach ($record in ($logResult.Output -split [char]0x1E)) {
+        if ([string]::IsNullOrWhiteSpace($record)) { continue }
+        $parts = $record -split [char]0x1F, 2
+        $subject = $parts[0].Trim()
+        if ($subject.Length -eq 0) { continue }
+        $body = if ($parts.Count -gt 1) { $parts[1] } else { '' }
+        $entries.Add([pscustomobject]@{ Subject = $subject; Body = $body })
+    }
+    return Format-SoftKeyDeliveryReleaseNotes -Subjects $entries
 }

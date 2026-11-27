@@ -37,8 +37,18 @@ sealed class SoftKeyUpdateProgressView
         AutomationProperties.SetLiveSetting(status, AutomationLiveSetting.Polite);
         AutomationProperties.SetName(bar, "Uppdateringens förlopp");
 
-        var icon = SoftKeySettingsDesign.Icon(UpdateIconOutline);
-        DockPanel.SetDock(icon, Dock.Right);
+        var glyph = new System.Windows.Shapes.Path
+        {
+            Data = System.Windows.Media.Geometry.Parse(UpdateIconOutline),
+            Stroke = SoftKeyPopupDesign.Accent, StrokeThickness = 1.75,
+            Width = 22, Height = 22, Stretch = System.Windows.Media.Stretch.Uniform,
+            StrokeLineJoin = System.Windows.Media.PenLineJoin.Round,
+            StrokeStartLineCap = System.Windows.Media.PenLineCap.Round,
+            StrokeEndLineCap = System.Windows.Media.PenLineCap.Round,
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center
+        };
+        var icon = SoftKeyUpdateWindow.CreateHeroTile(glyph);
+        DockPanel.SetDock(icon, Dock.Left);
         var text = new StackPanel
         {
             VerticalAlignment = VerticalAlignment.Center,

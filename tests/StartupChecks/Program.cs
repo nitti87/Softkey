@@ -2952,12 +2952,12 @@ static class StartupChecks
                     && string.Equals(status.Text, "provord", StringComparison.OrdinalIgnoreCase),
                     "the status row displays the current word without a button");
                 keyboard.GetType().GetField("modifierInput", Fields).SetValue(keyboard, (Func<KeyDef, bool, bool>)((_, _) => true));
-                foreach (string label in new[] { "Cap", "Sft", "Alt", "Ctl", "AltGr" })
+                foreach (string label in new[] { "Cap", "Sft", "Alt", "Ctl", "Win", "AltGr" })
                     Call(keyboard, "Press", keys.Keys.First(key => key.Label == label));
                 var modifier = Field<TextBlock>(keyboard, "modifierStatus");
                 Check(modifier.Text.Contains("Caps Lock") == Field<bool>(keyboard, "capsLockOn"),
                     "the status row reflects Caps Lock");
-                Check(new[] { "Shift", "Alt", "Ctrl", "AltGr" }.All(label => modifier.Text.Split("  ·  ").Contains(label)),
+                Check(new[] { "Shift", "Alt", "Ctrl", "Win", "AltGr" }.All(label => modifier.Text.Split("  ·  ").Contains(label)),
                     "the status row shows all selected desktop modifiers");
                 Call(keyboard, "ReleaseHeldModifiers");
                 var foreground = Native.ForegroundWindow;
@@ -3652,15 +3652,35 @@ static class StartupChecks
                 typeof(KeyboardWindow).GetMethod("RefreshUpdateIndicator", Fields).Invoke(keyboard, null);
                 Pump();
                 Check(indicator.Visibility == Visibility.Visible && indicator.Background == SoftKeyPopupDesign.Accent
-                    && headers[0].ActualWidth > arkivWidthWithoutUpdate,
-                    "Arkiv displays the high-contrast update badge only when an update is available");
+                    && Math.Abs(headers[0].ActualWidth - arkivWidthWithoutUpdate) <= 0.5,
+                    "Arkiv displays the corner status dot without shifting the menu bar");
                 var arkivItems = (StackPanel)typeof(KeyboardWindow).GetMethod("BuildMenuPanel", Fields).Invoke(keyboard, new object[] { 0 });
                 var updateMenuItem = (Button)arkivItems.Children[0];
-                Check(updateMenuItem.Content is StackPanel row && row.Children.OfType<Border>().Any(),
-                    "Arkiv dropdown highlights Uppdatering when an update is available");
+                Check(updateMenuItem.Content is DockPanel row
+                    && row.Children.OfType<Border>().Any(badge => badge.Child is TextBlock text && text.Text == "Ny"),
+                    "Arkiv dropdown highlights Uppdatering with a subtle Ny badge");
                 Render(menu, Path.Combine(output, "update-menu-available.png"));
+                typeof(KeyboardWindow).GetField("openMenu", Fields).SetValue(keyboard, 0);
+                typeof(KeyboardWindow).GetMethod("RefreshTopBar", Fields).Invoke(keyboard, null);
+                Check(indicator.Visibility == Visibility.Collapsed,
+                    "Arkiv hides the corner dot while its dropdown menu is open");
             }
             finally { keyboard.EnablePreviewClose(); keyboard.Close(); }
+
+            var parsedNotes = SoftKeyReleaseNotes.Parse(
+                "Tryggare uppdatering och tydligare statusrad.\n" +
+                "• [Nyhet] Inbyggd uppdatering i ren C# – Hämtar och verifierar direkt utan externa skript.\n" +
+                "• Tydligare versionsbeskrivning\n  Visar kategorier, verifieringsstatus och vad som bevaras.\n" +
+                "• Fix: Windows-tangenten på statusraden – Visar nu Win när tangenten är nedtryckt.");
+            Check(parsedNotes.Summary == "Tryggare uppdatering och tydligare statusrad."
+                && parsedNotes.Entries.Count == 3
+                && parsedNotes.Entries[0].Category == SoftKeyReleaseNotes.Category.Nyhet
+                && parsedNotes.Entries[0].Title == "Inbyggd uppdatering i ren C#"
+                && parsedNotes.Entries[0].Detail == "Hämtar och verifierar direkt utan externa skript."
+                && parsedNotes.Entries[1].Category == SoftKeyReleaseNotes.Category.Förbättring
+                && parsedNotes.Entries[1].Detail == "Visar kategorier, verifieringsstatus och vad som bevaras."
+                && parsedNotes.Entries[2].Category == SoftKeyReleaseNotes.Category.Fix,
+                "release notes parser extracts lead summary, categories, titles and detail lines");
 
             var pendingFetch = new TaskCompletionSource<SoftKeyUpdates.Preview>();
             var searching = new SoftKeyUpdateWindow(null, () => pendingFetch.Task, (_, _) => Task.CompletedTask);
@@ -3678,6 +3698,7 @@ static class StartupChecks
                 Pump();
                 Check(Field<ProgressBar>(searching, "searchProgress").Visibility == Visibility.Collapsed
                     && Field<Border>(searching, "description").Visibility == Visibility.Collapsed
+                    && Field<Border>(searching, "reassuranceBanner").Visibility == Visibility.Collapsed
                     && Field<Button>(searching, "check").Visibility == Visibility.Visible
                     && Field<Button>(searching, "install").Visibility == Visibility.Collapsed,
                     "up-to-date state hides release notes and shows the check button");
@@ -3697,23 +3718,30 @@ static class StartupChecks
             }
             finally { searching.Close(); }
 
-            var previewUpdate = new SoftKeyUpdates.Preview(48, new string('b', 40), "2026-11-27T14:00:00Z",
-                "• Tydligare tangenttext och smidigare storleksändring.\n• Uppdaterad menyindikator och ny uppdateringsdialog.",
-                new SoftKeyUpdates.Asset(48, "SoftKey-update-48.zip", "uploaded", 12_900_000, "sha256:" + new string('b', 64)));
+            var previewUpdate = new SoftKeyUpdates.Preview(9, new string('b', 40), "2026-11-27T14:00:00Z",
+                "Tryggare inbyggd uppdatering, tydligare dialog och buggfix för statusraden.\n" +
+                "• [Nyhet] Inbyggd uppdatering i ren C# – Hämtar och verifierar uppdateringar direkt utan externa skript.\n" +
+                "• [Förbättring] Tydligare versionsbeskrivning – Visar kategorier, verifieringsstatus och vad som bevaras.\n" +
+                "• [Fix] Windows-tangenten på statusraden – Visar nu när Windows-tangenten är nedtryckt, precis som Ctrl.",
+                new SoftKeyUpdates.Asset(9, "SoftKey-update-9.zip", "uploaded", 1_153_434, "sha256:" + new string('b', 64)));
             var availableDialog = new SoftKeyUpdateWindow(previewUpdate, () => Task.FromResult(previewUpdate), (_, _) => Task.CompletedTask);
             try
             {
                 ShowOffscreen(availableDialog);
                 Check(Field<Border>(availableDialog, "description").Visibility == Visibility.Visible
+                    && Field<Border>(availableDialog, "versionBadge").Visibility == Visibility.Visible
+                    && Field<Border>(availableDialog, "reassuranceBanner").Visibility == Visibility.Visible
+                    && Field<Border>(availableDialog, "changeCountBadge").Visibility == Visibility.Visible
+                    && Field<TextBlock>(availableDialog, "changeCountText").Text == "3 ändringar"
                     && Field<Button>(availableDialog, "install").Visibility == Visibility.Visible
                     && Field<Button>(availableDialog, "check").Visibility == Visibility.Collapsed,
-                    "available update state shows release notes and install button");
+                    "available update state shows structured release notes, verification metadata and reassurance banner");
                 Render(availableDialog, Path.Combine(output, "dialog-update-available.png"));
 
                 var progressView = Field<SoftKeyUpdateProgressView>(availableDialog, "progress");
                 Field<StackPanel>(availableDialog, "summary").Visibility = Visibility.Collapsed;
                 progressView.Content.Visibility = Visibility.Visible;
-                progressView.Show(new SoftKeyUpdates.Progress(58, "Hämtar uppdateringen", "SoftKey-update-48.zip  ·  7,2 av 12,4 MB"));
+                progressView.Show(new SoftKeyUpdates.Progress(58, "Hämtar uppdateringen", "SoftKey-update-9.zip  ·  640 KB av 1,1 MB"));
                 Pump();
                 Render(availableDialog, Path.Combine(output, "dialog-update-progress.png"));
             }
