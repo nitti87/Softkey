@@ -49,7 +49,7 @@ static class SoftKeySettingsDesign
                 new TextBlock { Text = label, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap },
                 new TextBlock
                 {
-                    Text = detail, FontSize = 12, Foreground = SoftKeyPopupDesign.ActionText,
+                    Text = detail, FontSize = 12, Foreground = SoftKeyPopupDesign.SecondaryText,
                     TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 3, 0, 0)
                 }
             }
@@ -70,7 +70,7 @@ static class SoftKeySettingsDesign
     {
         MinWidth = 38, Height = 38, CornerRadius = new CornerRadius(19), Padding = new Thickness(7, 0, 7, 0),
         Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
-        Background = SoftKeyPopupDesign.ActionSurface, Child = artwork, IsHitTestVisible = false
+        Background = SoftKeyPopupDesign.DialogFooter, Child = artwork, IsHitTestVisible = false
     };
 
     public static Border Card(UIElement content) => new()

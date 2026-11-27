@@ -5,6 +5,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Interop;
+using System.Windows.Markup;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Collections.Generic;
@@ -22,9 +23,17 @@ class MouseSettingsWindow : Window
     {
         VisualTree = new FrameworkElementFactory(typeof(ContentPresenter))
     };
+    static readonly ControlTemplate TimingInputTemplate = (ControlTemplate)XamlReader.Parse("""
+        <ControlTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" TargetType="{x:Type TextBox}">
+            <Border CornerRadius="6" Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                <ScrollViewer x:Name="PART_ContentHost" Focusable="False"/>
+            </Border>
+        </ControlTemplate>
+        """);
     static readonly Point RingCenter = new(26, 26);
     const double RingRadius = 23;
-    static readonly Brush MutedText = new SolidColorBrush(Color.FromRgb(0x60, 0x60, 0x60));
     readonly Settings cfg;
     readonly Func<bool> save;
     readonly Func<AutoclickTimingSettings, Task> shareTiming;
@@ -40,7 +49,7 @@ class MouseSettingsWindow : Window
     };
     readonly TextBlock previewStatus = new()
     {
-        FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = MutedText,
+        FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = SoftKeyPopupDesign.SecondaryText,
         TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 3, 0, 0)
     };
     readonly Path previewArc = new()
@@ -239,7 +248,7 @@ class MouseSettingsWindow : Window
 
     static TextBlock ErrorMessage()
     {
-        var message = new TextBlock { FontSize = 12, Foreground = Brushes.Firebrick,
+        var message = new TextBlock { FontSize = 12, Foreground = SoftKeyPopupDesign.ErrorText,
             Visibility = Visibility.Collapsed, TextWrapping = TextWrapping.Wrap };
         AutomationProperties.SetLiveSetting(message, AutomationLiveSetting.Polite);
         return message;
@@ -274,7 +283,7 @@ class MouseSettingsWindow : Window
                     Child = new TextBlock
                     {
                         Text = SignInHelp, MaxWidth = 210, TextWrapping = TextWrapping.Wrap,
-                        Foreground = Brushes.White, FontFamily = new FontFamily("Segoe UI"), FontSize = 12, LineHeight = 17
+                        Foreground = SoftKeyPopupDesign.OnAccentText, FontFamily = new FontFamily("Segoe UI"), FontSize = 12, LineHeight = 17
                     }
                 }
             }
@@ -293,7 +302,8 @@ class MouseSettingsWindow : Window
         box.Width = 62; box.Height = 30; box.FontSize = 13; box.MaxLength = 4; box.TextAlignment = TextAlignment.Right;
         box.VerticalContentAlignment = VerticalAlignment.Center;
         box.Padding = new Thickness(6, 1, 6, 1);
-        box.BorderBrush = SoftKeyPopupDesign.Border;
+        box.Template = TimingInputTemplate;
+        box.BorderBrush = SoftKeyPopupDesign.ControlOutline;
         AutomationProperties.SetName(box, label);
         string fieldHelp = help == null ? unit : help + " " + unit;
         AutomationProperties.SetHelpText(box, signInHelp == null ? fieldHelp : fieldHelp + ". " + SignInHelp);
@@ -307,7 +317,7 @@ class MouseSettingsWindow : Window
             error.Visibility = saveError.Visibility = Visibility.Collapsed;
         };
 
-        var caret = new Rectangle { Width = 2, Fill = Brushes.Black, Visibility = Visibility.Collapsed, IsHitTestVisible = false };
+        var caret = new Rectangle { Width = 2, Fill = SoftKeyPopupDesign.PrimaryText, Visibility = Visibility.Collapsed, IsHitTestVisible = false };
         carets[box] = caret;
         var overlay = new Canvas { IsHitTestVisible = false };   // ett genomskinligt lager ovanpå rutan
         overlay.Children.Add(caret);
@@ -333,12 +343,13 @@ class MouseSettingsWindow : Window
         Grid.SetColumn(holder, 1); grid.Children.Add(holder);
         var unitText = new TextBlock
         {
-            Text = unit, FontSize = 11, Foreground = MutedText, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap
+            Text = unit, FontSize = 11, Foreground = SoftKeyPopupDesign.SecondaryText,
+            VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap
         };
         Grid.SetColumn(unitText, 2); grid.Children.Add(unitText);
         if (help != null)
         {
-            var explanation = new TextBlock { Text = help, FontSize = 12, Foreground = MutedText,
+            var explanation = new TextBlock { Text = help, FontSize = 12, Foreground = SoftKeyPopupDesign.SecondaryText,
                 Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap };
             Grid.SetRow(explanation, 1); Grid.SetColumnSpan(explanation, 3); grid.Children.Add(explanation);
         }
@@ -350,10 +361,10 @@ class MouseSettingsWindow : Window
     void Select(TextBox t)
     {
         activeBox = t;
-        dwell.Background = t == dwell ? SoftKeyPopupDesign.FieldSelected : Brushes.White;
-        jitter.Background = t == jitter ? SoftKeyPopupDesign.FieldSelected : Brushes.White;
-        dwell.BorderBrush = t == dwell ? SoftKeyPopupDesign.Accent : SoftKeyPopupDesign.Border;
-        jitter.BorderBrush = t == jitter ? SoftKeyPopupDesign.Accent : SoftKeyPopupDesign.Border;
+        dwell.Background = t == dwell ? SoftKeyPopupDesign.FieldSelected : SoftKeyPopupDesign.CardSurface;
+        jitter.Background = t == jitter ? SoftKeyPopupDesign.FieldSelected : SoftKeyPopupDesign.CardSurface;
+        dwell.BorderBrush = t == dwell ? SoftKeyPopupDesign.Accent : SoftKeyPopupDesign.ControlOutline;
+        jitter.BorderBrush = t == jitter ? SoftKeyPopupDesign.Accent : SoftKeyPopupDesign.ControlOutline;
         UpdateCaret();
         KeyAvailabilityChanged?.Invoke();
     }

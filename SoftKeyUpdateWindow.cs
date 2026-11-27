@@ -25,12 +25,6 @@ sealed class SoftKeyUpdateWindow : Window
     const string ShieldInfoOutline = "M 7.5,1.5 L 12.8,3.6 V 7.4 C 12.8,10.5 10.5,12.7 7.5,13.7 C 4.5,12.7 2.2,10.5 2.2,7.4 V 3.6 Z M 7.5,5.3 V 5.5 M 7.5,7.3 V 10.4";
     const string ButtonDownloadOutline = "M 6,1.5 V 8.2 M 6,8.2 L 3.3,5.5 M 6,8.2 L 8.7,5.5 M 2,10.5 H 10";
 
-    static readonly Brush MutedText = new SolidColorBrush(Color.FromRgb(0x4A, 0x61, 0x78));
-    static readonly Brush SlateTagText = new SolidColorBrush(Color.FromRgb(0x33, 0x48, 0x5E));
-    static readonly Brush HairlineDivider = new SolidColorBrush(Color.FromRgb(0xE4, 0xEB, 0xF1));
-    static readonly Brush ErrorSurface = new SolidColorBrush(Color.FromRgb(0xFD, 0xF2, 0xF2));
-    static readonly Brush ErrorBorder = new SolidColorBrush(Color.FromRgb(0xE6, 0xB8, 0xB8));
-
     readonly TextBlock title = new()
     {
         FontSize = 15.5, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap,
@@ -43,7 +37,7 @@ sealed class SoftKeyUpdateWindow : Window
     readonly Border versionBadge;
     readonly TextBlock metadata = new()
     {
-        FontSize = 12, Foreground = MutedText, TextWrapping = TextWrapping.Wrap,
+        FontSize = 12, Foreground = SoftKeyPopupDesign.SecondaryText, TextWrapping = TextWrapping.Wrap,
         Margin = new Thickness(0, 4, 0, 0)
     };
     readonly WrapPanel metaStrip = new()
@@ -51,8 +45,8 @@ sealed class SoftKeyUpdateWindow : Window
         Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center,
         Margin = new Thickness(0, 5, 0, 0), Visibility = Visibility.Collapsed
     };
-    readonly TextBlock publishedMeta = new() { FontSize = 12, Foreground = MutedText, VerticalAlignment = VerticalAlignment.Center };
-    readonly TextBlock sizeMeta = new() { FontSize = 12, Foreground = MutedText, VerticalAlignment = VerticalAlignment.Center };
+    readonly TextBlock publishedMeta = new() { FontSize = 12, Foreground = SoftKeyPopupDesign.SecondaryText, VerticalAlignment = VerticalAlignment.Center };
+    readonly TextBlock sizeMeta = new() { FontSize = 12, Foreground = SoftKeyPopupDesign.SecondaryText, VerticalAlignment = VerticalAlignment.Center };
     readonly System.Windows.Shapes.Path statusGlyph = new()
     {
         Stroke = SoftKeyPopupDesign.Accent, StrokeThickness = 1.7,
@@ -69,6 +63,7 @@ sealed class SoftKeyUpdateWindow : Window
     {
         Height = 4, Minimum = 0, Maximum = 100, IsIndeterminate = true,
         Foreground = SoftKeyPopupDesign.Accent, Background = SoftKeyPopupDesign.ActionSurface,
+        Template = SoftKeyPopupDesign.ProgressTemplate,
         BorderThickness = new Thickness(0), Margin = new Thickness(0, 10, 0, 0), Visibility = Visibility.Collapsed
     };
     readonly TextBlock notesHeading = new()
@@ -78,7 +73,7 @@ sealed class SoftKeyUpdateWindow : Window
     };
     readonly TextBlock changeCountText = new()
     {
-        FontSize = 11.5, FontWeight = FontWeights.Medium, Foreground = MutedText
+        FontSize = 11.5, FontWeight = FontWeights.Medium, Foreground = SoftKeyPopupDesign.SecondaryText
     };
     readonly Border changeCountBadge;
     readonly DockPanel notesHeaderRow;
@@ -93,13 +88,13 @@ sealed class SoftKeyUpdateWindow : Window
     readonly StackPanel summary = new();
     readonly TextBlock feedbackText = new()
     {
-        FontSize = 12, TextWrapping = TextWrapping.Wrap, Foreground = Brushes.Firebrick
+        FontSize = 12, TextWrapping = TextWrapping.Wrap, Foreground = SoftKeyPopupDesign.ErrorText
     };
     readonly Border feedbackCard;
     readonly SoftKeyUpdateProgressView progress = new();
     readonly TextBlock footerVersion = new()
     {
-        FontSize = 11.5, Foreground = MutedText, VerticalAlignment = VerticalAlignment.Center
+        FontSize = 11.5, Foreground = SoftKeyPopupDesign.SecondaryText, VerticalAlignment = VerticalAlignment.Center
     };
     readonly Button check = SoftKeyButtonDesign.Action("Sök efter uppdateringar", true);
     readonly Button install = SoftKeyButtonDesign.Action("Installera uppdateringen", true);
@@ -181,7 +176,7 @@ sealed class SoftKeyUpdateWindow : Window
 
         feedbackCard = new Border
         {
-            Background = ErrorSurface, BorderBrush = ErrorBorder, BorderThickness = new Thickness(1),
+            Background = SoftKeyPopupDesign.ErrorSurface, BorderBrush = SoftKeyPopupDesign.ErrorBorder, BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(8), Padding = new Thickness(12, 9, 12, 9),
             Margin = new Thickness(0, 10, 0, 0), Visibility = Visibility.Collapsed, Child = feedbackText
         };
@@ -229,11 +224,11 @@ sealed class SoftKeyUpdateWindow : Window
     void BuildMetaStrip()
     {
         var dateGroup = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        dateGroup.Children.Add(MiniIcon(CalendarIconOutline, 13, MutedText, new Thickness(0, 0, 4, 0)));
+        dateGroup.Children.Add(MiniIcon(CalendarIconOutline, 13, SoftKeyPopupDesign.SecondaryText, new Thickness(0, 0, 4, 0)));
         dateGroup.Children.Add(publishedMeta);
 
         var sizeGroup = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        sizeGroup.Children.Add(MiniIcon(PackageIconOutline, 13, MutedText, new Thickness(0, 0, 4, 0)));
+        sizeGroup.Children.Add(MiniIcon(PackageIconOutline, 13, SoftKeyPopupDesign.SecondaryText, new Thickness(0, 0, 4, 0)));
         sizeGroup.Children.Add(sizeMeta);
 
         var verifiedContent = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
@@ -260,7 +255,7 @@ sealed class SoftKeyUpdateWindow : Window
 
     static TextBlock MetaSeparator() => new()
     {
-        Text = "·", FontSize = 12, Foreground = MutedText,
+        Text = "·", FontSize = 12, Foreground = SoftKeyPopupDesign.SecondaryText,
         Margin = new Thickness(6, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center
     };
 
@@ -305,7 +300,7 @@ sealed class SoftKeyUpdateWindow : Window
         VerticalAlignment = VerticalAlignment.Center,
         Children =
         {
-            MiniIcon(ButtonDownloadOutline, 12, SoftKeyPopupDesign.ActionText, new Thickness(0, 0, 6, 0)),
+            MiniIcon(ButtonDownloadOutline, 12, SoftKeyPopupDesign.OnAccentText, new Thickness(0, 0, 6, 0)),
             new TextBlock { Text = "Installera uppdateringen", VerticalAlignment = VerticalAlignment.Center }
         }
     };
@@ -366,7 +361,7 @@ sealed class SoftKeyUpdateWindow : Window
             notesList.Children.Add(new TextBlock
             {
                 Text = "Det finns inga versionsanteckningar för den här uppdateringen.",
-                FontSize = 12.5, Foreground = MutedText, TextWrapping = TextWrapping.Wrap, LineHeight = 18
+                FontSize = 12.5, Foreground = SoftKeyPopupDesign.SecondaryText, TextWrapping = TextWrapping.Wrap, LineHeight = 18
             });
             return;
         }
@@ -378,12 +373,12 @@ sealed class SoftKeyUpdateWindow : Window
         {
             notesList.Children.Add(new TextBlock
             {
-                Text = parsed.Summary, FontSize = 12.5, Foreground = MutedText,
+                Text = parsed.Summary, FontSize = 12.5, Foreground = SoftKeyPopupDesign.SecondaryText,
                 TextWrapping = TextWrapping.Wrap, LineHeight = 18
             });
             notesList.Children.Add(new Border
             {
-                Height = 1, Background = HairlineDivider,
+                Height = 1, Background = SoftKeyPopupDesign.CardBorder,
                 Margin = new Thickness(0, 10, 0, 10), IsHitTestVisible = false
             });
         }
@@ -408,7 +403,7 @@ sealed class SoftKeyUpdateWindow : Window
             {
                 text.Children.Add(new TextBlock
                 {
-                    Text = entry.Detail, FontSize = 11.5, Foreground = MutedText,
+                    Text = entry.Detail, FontSize = 11.5, Foreground = SoftKeyPopupDesign.SecondaryText,
                     TextWrapping = TextWrapping.Wrap, LineHeight = 16, Margin = new Thickness(0, 1.5, 0, 0)
                 });
             }
@@ -424,8 +419,8 @@ sealed class SoftKeyUpdateWindow : Window
         (Brush background, Brush border, Brush foreground) = category switch
         {
             SoftKeyReleaseNotes.Category.Nyhet => (SoftKeyPopupDesign.ActionSurface, Brushes.Transparent, SoftKeyPopupDesign.ActionText),
-            SoftKeyReleaseNotes.Category.Fix => (SoftKeyPopupDesign.DialogSurface, SoftKeyPopupDesign.CardBorder, MutedText),
-            _ => (SoftKeyPopupDesign.DialogFooter, Brushes.Transparent, SlateTagText)
+            SoftKeyReleaseNotes.Category.Fix => (SoftKeyPopupDesign.DialogSurface, SoftKeyPopupDesign.CardBorder, SoftKeyPopupDesign.SecondaryText),
+            _ => (SoftKeyPopupDesign.DialogFooter, Brushes.Transparent, SoftKeyPopupDesign.SecondaryText)
         };
         return new Border
         {

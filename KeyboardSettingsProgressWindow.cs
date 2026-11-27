@@ -4,7 +4,6 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Interop;
-using System.Windows.Markup;
 using System.Windows.Threading;
 
 sealed class KeyboardSettingsProgressWindow : Window
@@ -55,7 +54,7 @@ sealed class KeyboardSettingsProgressWindow : Window
         {
             IsIndeterminate = true, Height = 6, Margin = new Thickness(0, 16, 0, 0),
             Background = SoftKeyPopupDesign.ActionSurface, Foreground = SoftKeyPopupDesign.Accent,
-            Template = ProgressTemplate
+            Template = SoftKeyPopupDesign.ProgressTemplate
         };
         AutomationProperties.SetName(progress, Title);
         layout.Children.Add(progress);
@@ -108,16 +107,4 @@ sealed class KeyboardSettingsProgressWindow : Window
 
     void PositionCover() => Native.CoverWithoutActivation(new WindowInteropHelper(this).Handle,
         new WindowInteropHelper(keyboard).Handle);
-
-    static readonly ControlTemplate ProgressTemplate = (ControlTemplate)XamlReader.Parse("""
-        <ControlTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" TargetType="{x:Type ProgressBar}">
-            <Border x:Name="PART_Track" Background="{TemplateBinding Background}" CornerRadius="3" ClipToBounds="True">
-                <Grid x:Name="PART_Indicator" HorizontalAlignment="Left" ClipToBounds="True">
-                    <Border x:Name="PART_GlowRect" Width="84" HorizontalAlignment="Left" CornerRadius="3"
-                            Background="{TemplateBinding Foreground}"/>
-                </Grid>
-            </Border>
-        </ControlTemplate>
-        """);
 }

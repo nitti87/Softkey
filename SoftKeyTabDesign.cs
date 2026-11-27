@@ -50,7 +50,7 @@ static class SoftKeyTabDesign
         var band = new FrameworkElementFactory(typeof(Border));
         band.SetValue(Border.BorderBrushProperty, SoftKeyPopupDesign.CardBorder);
         band.SetValue(Border.BorderThicknessProperty, new Thickness(1));
-        band.SetValue(Border.BackgroundProperty, SoftKeyPopupDesign.FieldSelected);
+        band.SetValue(Border.BackgroundProperty, SoftKeyKeyDesign.TraySurface);
         band.SetValue(Border.CornerRadiusProperty, new CornerRadius(10));
         band.SetValue(Border.PaddingProperty, new Thickness(4));
         var headers = new FrameworkElementFactory(typeof(UniformGrid));
@@ -65,6 +65,7 @@ static class SoftKeyTabDesign
     {
         var style = new Style(typeof(TabItem));
         style.Setters.Add(new Setter(FrameworkElement.MinHeightProperty, 38.0));
+        style.Setters.Add(new Setter(Control.ForegroundProperty, SoftKeyPopupDesign.PrimaryText));
         var root = new FrameworkElementFactory(typeof(Border), "TabSurface");
         root.SetValue(SoftKeyHoverTransition.BackgroundProperty, Brushes.Transparent);
         root.SetValue(SoftKeyHoverTransition.BorderBrushProperty, Brushes.Transparent);

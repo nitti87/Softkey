@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Markup;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
 using System.Windows.Threading;
@@ -10,32 +11,71 @@ using System.Windows.Threading;
 // Reusable visual language for compact SoftKey popup/settings windows.
 static class SoftKeyPopupDesign
 {
-    public static readonly Brush WindowSurface = new SolidColorBrush(Color.FromRgb(0xF1, 0xF1, 0xF1));
-    public static readonly Brush TitleBarSurface = new SolidColorBrush(Color.FromRgb(0xE8, 0xED, 0xF3));
-    public static readonly Brush GroupSurface = new SolidColorBrush(Color.FromRgb(0xFA, 0xFA, 0xFA));
-    public static readonly Brush Border = new SolidColorBrush(Color.FromRgb(0xD5, 0xD5, 0xD5));
-    public static readonly Brush PrimaryText = new SolidColorBrush(Color.FromRgb(0x1F, 0x1F, 0x1F));
-    public static readonly Brush Accent = new SolidColorBrush(Color.FromRgb(0x00, 0x67, 0xC0));
-    public static readonly Brush ActionSurface = new SolidColorBrush(Color.FromRgb(0xD9, 0xEA, 0xF7));
-    public static readonly Brush ActionHover = new SolidColorBrush(Color.FromRgb(0xC8, 0xDE, 0xF0));
-    public static readonly Brush ActionPressed = new SolidColorBrush(Color.FromRgb(0xB7, 0xD2, 0xE9));
-    public static readonly Brush ActionBorder = new SolidColorBrush(Color.FromRgb(0x70, 0xA8, 0xD2));
-    public static readonly Brush ActionText = new SolidColorBrush(Color.FromRgb(0x1F, 0x3B, 0x53));
-    public static readonly Brush FieldSelected = new SolidColorBrush(Color.FromRgb(0xE8, 0xED, 0xF2));
-    public static readonly Brush DialogSurface = new SolidColorBrush(Color.FromRgb(0xF3, 0xF6, 0xF9));
-    public static readonly Brush DialogFooter = new SolidColorBrush(Color.FromRgb(0xEB, 0xF0, 0xF5));
-    public static readonly Brush CardSurface = new SolidColorBrush(Color.FromRgb(0xFA, 0xFC, 0xFE));
-    public static readonly Brush CardBorder = new SolidColorBrush(Color.FromRgb(0xCD, 0xD6, 0xDE));
-    public static readonly Brush CardHoverSurface = new SolidColorBrush(Color.FromRgb(0xF1, 0xF8, 0xFD));
-    public static readonly Brush CardHoverBorder = new SolidColorBrush(Color.FromRgb(0x8D, 0xB8, 0xD1));
-    public static readonly Brush MenuSurface = new SolidColorBrush(Color.FromRgb(0xF9, 0xF9, 0xF9));
-    public static readonly Brush MenuHover = new SolidColorBrush(Color.FromRgb(0xEA, 0xEA, 0xEA));
-    public static readonly Brush MenuPressed = new SolidColorBrush(Color.FromRgb(0xE5, 0xE5, 0xE5));
+    public static readonly Brush DialogSurface = SoftKeyKeyDesign.WindowSurface;
+    public static readonly Brush TitleBarSurface = SoftKeyKeyDesign.FunctionFace;
+    public static readonly Brush DialogFooter = SoftKeyKeyDesign.FunctionFace;
+    public static readonly Brush CardSurface = SoftKeyKeyDesign.LetterFace;
+    public static readonly Brush CardBorder = SoftKeyKeyDesign.MutedDivider;
+    public static readonly Brush Border = SoftKeyKeyDesign.Outline;
+    public static readonly Brush ControlOutline = new SolidColorBrush(Color.FromRgb(0x82, 0x7D, 0x73));
+    public static readonly Brush PrimaryText = SoftKeyKeyDesign.PrimaryText;
+    public static readonly Brush SecondaryText = SoftKeyKeyDesign.SecondaryText;
+    public static readonly Brush OnAccentText = Brushes.White;
+    public static readonly Brush Accent = SoftKeyKeyDesign.SlateAccent;
+    public static readonly Brush ActionText = SoftKeyKeyDesign.SlateAccentText;
+    public static readonly Brush ActionSurface = SoftKeyKeyDesign.AccentFace;
+    public static readonly Brush ActionHover = SoftKeyKeyDesign.KeyFlash;
+    public static readonly Brush ActionPressed = new SolidColorBrush(Color.FromRgb(0xBA, 0xCD, 0xDC));
+    public static readonly Brush ActionBorder = SoftKeyKeyDesign.SlateOutline;
+    public static readonly Brush FieldSelected = ActionSurface;
+    public static readonly Brush CardHoverSurface = SoftKeyKeyDesign.KeyHover;
+    public static readonly Brush CardHoverBorder = ActionBorder;
+    public static readonly Brush MenuSurface = CardSurface;
+    public static readonly Brush MenuHover = SoftKeyKeyDesign.HeaderHover;
+    public static readonly Brush MenuPressed = SoftKeyKeyDesign.ModifierFace;
+    public static readonly Brush ErrorText = new SolidColorBrush(Color.FromRgb(0x9F, 0x30, 0x24));
+    public static readonly Brush ErrorSurface = new SolidColorBrush(Color.FromRgb(0xFA, 0xEC, 0xE6));
+    public static readonly Brush ErrorBorder = new SolidColorBrush(Color.FromRgb(0xD8, 0xA9, 0x9B));
     public static readonly Thickness MenuRowPadding = new(8, 4, 8, 4);
     public static readonly Thickness MenuRowMargin = new(0, 1, 0, 1);
     public const double MenuRowHeight = 32;
     public const double TitleFontSize = 12;
     public const double CardCornerRadius = 10;
+    const double FrameCornerRadius = 11;
+
+    static readonly Style TextBoxStyle = InputStyle(typeof(TextBox));
+    static readonly Style PasswordBoxStyle = InputStyle(typeof(PasswordBox));
+
+    public static readonly ControlTemplate ProgressTemplate = (ControlTemplate)XamlReader.Parse("""
+        <ControlTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" TargetType="{x:Type ProgressBar}">
+            <Border x:Name="PART_Track" Background="{TemplateBinding Background}" CornerRadius="3" ClipToBounds="True">
+                <Grid x:Name="PART_Indicator" HorizontalAlignment="Left" ClipToBounds="True">
+                    <Border x:Name="Fill" Background="{TemplateBinding Foreground}" CornerRadius="3"/>
+                    <Border x:Name="PART_GlowRect" Width="84" HorizontalAlignment="Left" CornerRadius="3"
+                            Background="{TemplateBinding Foreground}" Visibility="Collapsed"/>
+                </Grid>
+            </Border>
+            <ControlTemplate.Triggers>
+                <Trigger Property="IsIndeterminate" Value="True">
+                    <Setter TargetName="Fill" Property="Visibility" Value="Collapsed"/>
+                    <Setter TargetName="PART_GlowRect" Property="Visibility" Value="Visible"/>
+                </Trigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+        """);
+
+    static Style InputStyle(Type type)
+    {
+        var style = new Style(type);
+        style.Setters.Add(new Setter(Control.BackgroundProperty, CardSurface));
+        style.Setters.Add(new Setter(Control.ForegroundProperty, PrimaryText));
+        style.Setters.Add(new Setter(Control.BorderBrushProperty, ControlOutline));
+        style.Setters.Add(new Setter(TextBox.SelectionBrushProperty, Accent));
+        style.Setters.Add(new Setter(TextBox.SelectionTextBrushProperty, OnAccentText));
+        style.Setters.Add(new Setter(TextBox.CaretBrushProperty, PrimaryText));
+        return style;
+    }
 
     public static void ConfigureWindow(Window window, Action<Size> fitToWorkArea = null)
     {
@@ -48,6 +88,8 @@ static class SoftKeyPopupDesign
         window.ResizeMode = ResizeMode.NoResize;
         window.SizeToContent = SizeToContent.WidthAndHeight;
         window.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        window.Resources[typeof(TextBox)] = TextBoxStyle;
+        window.Resources[typeof(PasswordBox)] = PasswordBoxStyle;
         window.Loaded += CenterOnLoad;
 
         void CenterOnLoad(object sender, RoutedEventArgs args)
@@ -117,7 +159,7 @@ static class SoftKeyPopupDesign
         }
         titleBar.Children.Add(new TextBlock
         {
-            Text = title, FontSize = TitleFontSize, FontWeight = FontWeights.SemiBold,
+            Text = title, FontSize = TitleFontSize, FontWeight = FontWeights.SemiBold, Foreground = PrimaryText,
             VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(9, 0, 0, 0)
         });
         titleBar.MouseLeftButtonDown += (_, e) =>
@@ -128,16 +170,20 @@ static class SoftKeyPopupDesign
 
         var bodySurface = new Border
         {
-            Background = DialogSurface, CornerRadius = new CornerRadius(0, 0, 8, 8), Child = body
+            Background = DialogSurface, CornerRadius = new CornerRadius(0, 0, CardCornerRadius, CardCornerRadius),
+            Child = body
         };
         return SurfaceFrame(new StackPanel { Children = { titleBar, bodySurface } }, TitleBarSurface);
     }
 
     public static Border SurfaceFrame(UIElement content, Brush surface) => new()
     {
-        Margin = new Thickness(8), CornerRadius = new CornerRadius(9),
+        Margin = new Thickness(8), CornerRadius = new CornerRadius(FrameCornerRadius),
         Background = surface, BorderBrush = CardBorder, BorderThickness = new Thickness(1),
-        Effect = new DropShadowEffect { Color = Colors.Black, Opacity = 0.2, BlurRadius = 12, ShadowDepth = 2, Direction = 270 },
+        Effect = new DropShadowEffect
+        {
+            Color = ((SolidColorBrush)PrimaryText).Color, Opacity = 0.22, BlurRadius = 12, ShadowDepth = 2, Direction = 270
+        },
         Child = content
     };
 
@@ -151,7 +197,7 @@ static class SoftKeyPopupDesign
         panel.Children.Add(new Border
         {
             Background = DialogFooter, BorderBrush = CardBorder, BorderThickness = new Thickness(0, 1, 0, 0),
-            CornerRadius = new CornerRadius(0, 0, 8, 8),
+            CornerRadius = new CornerRadius(0, 0, CardCornerRadius, CardCornerRadius),
             Padding = new Thickness(16, 10, 16, 12), Child = footer
         });
         return panel;
@@ -169,20 +215,20 @@ static class SoftKeyPopupDesign
             content.Children.Add(new TextBlock
             {
                 Text = title, FontSize = 13, FontWeight = FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x24, 0x24, 0x24)), Margin = new Thickness(0, 0, 0, 8)
+                Foreground = PrimaryText, Margin = new Thickness(0, 0, 0, 8)
             });
         if (!string.IsNullOrWhiteSpace(description))
             content.Children.Add(new TextBlock
             {
                 Text = description, FontSize = 11,
-                Foreground = new SolidColorBrush(Color.FromRgb(0x45, 0x45, 0x45)),
+                Foreground = SecondaryText,
                 Margin = new Thickness(0, -2, 0, 7)
             });
         foreach (var control in controls) content.Children.Add(control);
         return new Border
         {
-            Background = GroupSurface, BorderBrush = Border, BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(5), Padding = new Thickness(11, 9, 11, 8),
+            Background = CardSurface, BorderBrush = CardBorder, BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(CardCornerRadius), Padding = new Thickness(11, 9, 11, 8),
             Margin = new Thickness(0, 0, 0, 9), Child = content
         };
     }

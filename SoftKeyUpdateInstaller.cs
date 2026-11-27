@@ -14,7 +14,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Media;
 using Microsoft.Win32;
 
 // Native C# elevated updater executed by signed SoftKey.Startup.exe without spawning PowerShell.
@@ -123,18 +122,13 @@ static class SoftKeyUpdateInstaller
         var window = new Window
         {
             Title = "Uppdaterar SoftKey",
-            WindowStyle = WindowStyle.None,
-            AllowsTransparency = true,
-            Background = Brushes.Transparent,
-            FontFamily = new FontFamily("Segoe UI"),
-            ResizeMode = ResizeMode.NoResize,
-            SizeToContent = SizeToContent.WidthAndHeight,
-            WindowStartupLocation = WindowStartupLocation.Manual,
             Left = request.Left,
             Top = request.Top,
-            Topmost = true,
-            Content = SoftKeyPopupDesign.Frame("Uppdaterar SoftKey", body, null, null)
+            Topmost = true
         };
+        SoftKeyPopupDesign.ConfigureWindow(window);
+        window.WindowStartupLocation = WindowStartupLocation.Manual;
+        window.Content = SoftKeyPopupDesign.Frame(window.Title, body, null, null);
 
         bool allowClose = false;
         window.Closing += (_, e) => { if (!allowClose) e.Cancel = true; };

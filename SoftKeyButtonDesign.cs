@@ -6,8 +6,7 @@ using System.Windows.Media;
 // Shared button appearance and placement for SoftKey popup windows.
 static class SoftKeyButtonDesign
 {
-    static readonly Brush CloseText = new SolidColorBrush(Color.FromRgb(0x30, 0x30, 0x30));
-    static readonly Brush CloseHover = new SolidColorBrush(Color.FromRgb(0xC4, 0x2B, 0x1C));
+    static readonly Style ActionFocusStyle = CreateFocusStyle();
 
     public static Button Apply(bool primary = false)
     {
@@ -30,25 +29,27 @@ static class SoftKeyButtonDesign
         {
             Content = text, Width = 90, Height = 30, FontSize = 12,
             Margin = new Thickness(6, 0, 0, 0), Padding = new Thickness(6, 3, 6, 3),
-            Background = primary ? SoftKeyPopupDesign.ActionSurface : SoftKeyPopupDesign.CardSurface,
-            Foreground = primary ? SoftKeyPopupDesign.ActionText : SoftKeyPopupDesign.PrimaryText,
-            BorderBrush = primary ? SoftKeyPopupDesign.ActionBorder : SoftKeyPopupDesign.CardBorder,
+            Background = primary ? SoftKeyKeyDesign.EnterFace : SoftKeyPopupDesign.CardSurface,
+            Foreground = primary ? SoftKeyPopupDesign.OnAccentText : SoftKeyPopupDesign.PrimaryText,
+            BorderBrush = primary ? SoftKeyKeyDesign.EnterBorder : SoftKeyPopupDesign.CardBorder,
+            BorderThickness = new Thickness(1), FocusVisualStyle = ActionFocusStyle,
             Template = ButtonTemplate(animateHover ? 8 : 4, contentAlignment)
         };
         Brush normal = button.Background;
         Brush border = button.BorderBrush;
-        Brush hover = primary ? SoftKeyPopupDesign.ActionHover : SoftKeyPopupDesign.CardHoverSurface;
+        Brush hover = primary ? SoftKeyKeyDesign.EnterHover : SoftKeyPopupDesign.CardHoverSurface;
+        Brush pressed = primary ? SoftKeyKeyDesign.EnterPressed : SoftKeyPopupDesign.ActionPressed;
 
         void ChangeHover(bool hovered)
         {
             SoftKeyHoverTransition.Apply(button, Control.BackgroundProperty, hovered ? hover : normal, animateHover);
             if (animateHover)
                 SoftKeyHoverTransition.Apply(button, Control.BorderBrushProperty,
-                    hovered ? SoftKeyPopupDesign.CardHoverBorder : border);
+                    hovered && !primary ? SoftKeyPopupDesign.CardHoverBorder : border);
         }
 
         button.MouseEnter += (_, _) => ChangeHover(true);
-        button.PreviewMouseLeftButtonDown += (_, _) => button.Background = SoftKeyPopupDesign.ActionPressed;
+        button.PreviewMouseLeftButtonDown += (_, _) => button.Background = pressed;
         button.PreviewMouseLeftButtonUp += (_, _) => ChangeHover(button.IsMouseOver);
         button.MouseLeave += (_, _) => ChangeHover(false);
         return button;
@@ -59,7 +60,7 @@ static class SoftKeyButtonDesign
         var button = new Button
         {
             Content = "×", Width = 46, Height = 36, FontSize = 18,
-            Foreground = CloseText,
+            Foreground = SoftKeyPopupDesign.PrimaryText,
             Background = SoftKeyPopupDesign.TitleBarSurface, BorderBrush = Brushes.Transparent,
             BorderThickness = new Thickness(0), Padding = new Thickness(0),
             Focusable = false, ToolTip = "Stäng", Template = ButtonTemplate(7)
@@ -67,13 +68,13 @@ static class SoftKeyButtonDesign
         button.Click += (_, _) => close();
         button.MouseEnter += (_, _) =>
         {
-            SoftKeyHoverTransition.Apply(button, Control.BackgroundProperty, CloseHover);
-            SoftKeyHoverTransition.Apply(button, Control.ForegroundProperty, Brushes.White);
+            SoftKeyHoverTransition.Apply(button, Control.BackgroundProperty, SoftKeyPopupDesign.ErrorText);
+            SoftKeyHoverTransition.Apply(button, Control.ForegroundProperty, SoftKeyPopupDesign.OnAccentText);
         };
         button.MouseLeave += (_, _) =>
         {
             SoftKeyHoverTransition.Apply(button, Control.BackgroundProperty, SoftKeyPopupDesign.TitleBarSurface);
-            SoftKeyHoverTransition.Apply(button, Control.ForegroundProperty, CloseText);
+            SoftKeyHoverTransition.Apply(button, Control.ForegroundProperty, SoftKeyPopupDesign.PrimaryText);
         };
         return button;
     }
@@ -91,6 +92,18 @@ static class SoftKeyButtonDesign
             row.Children.Add(buttons[i]);
         }
         return row;
+    }
+
+    static Style CreateFocusStyle()
+    {
+        var outline = new FrameworkElementFactory(typeof(Border));
+        outline.SetValue(Border.BorderBrushProperty, SoftKeyPopupDesign.Accent);
+        outline.SetValue(Border.BorderThicknessProperty, new Thickness(1));
+        outline.SetValue(Border.CornerRadiusProperty, new CornerRadius(10));
+        outline.SetValue(FrameworkElement.MarginProperty, new Thickness(-3));
+        var style = new Style(typeof(Control));
+        style.Setters.Add(new Setter(Control.TemplateProperty, new ControlTemplate(typeof(Control)) { VisualTree = outline }));
+        return style;
     }
 
     static ControlTemplate ButtonTemplate(double radius, HorizontalAlignment contentAlignment = HorizontalAlignment.Center)

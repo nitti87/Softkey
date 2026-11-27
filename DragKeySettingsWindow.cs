@@ -22,7 +22,7 @@ sealed class DragKeySettingsWindow : Window
         middleDrag.IsChecked = settings.MiddleDragEnabled;
         var message = new TextBlock
         {
-            Foreground = Brushes.Firebrick, Margin = new Thickness(10, 4, 10, 2), Visibility = Visibility.Collapsed,
+            Foreground = SoftKeyPopupDesign.ErrorText, Margin = new Thickness(10, 4, 10, 2), Visibility = Visibility.Collapsed,
             TextWrapping = TextWrapping.Wrap
         };
         AutomationProperties.SetLiveSetting(message, AutomationLiveSetting.Polite);

@@ -88,10 +88,10 @@ sealed class PasswordSuggestionWindow : Window
         }));
     }
 
-    internal static Path LockIcon(double size) => new()
+    internal static Path LockIcon(double size, Brush stroke = null) => new()
     {
         Width = size, Height = size, Stretch = Stretch.Uniform, IsHitTestVisible = false,
-        Stroke = SoftKeyPopupDesign.ActionText, StrokeThickness = 1.7,
+        Stroke = stroke ?? SoftKeyPopupDesign.ActionText, StrokeThickness = 1.7,
         StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, StrokeLineJoin = PenLineJoin.Round,
         Data = Geometry.Parse("M 5,9 V 6 A 5,5 0 0 1 15,6 V 9 M 3,9 H 17 V 19 H 3 Z M 10,13 V 15")
     };

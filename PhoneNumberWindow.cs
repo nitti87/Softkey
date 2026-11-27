@@ -86,12 +86,12 @@ sealed class PhoneNumberWindow : Window
         var content = new DockPanel { Children = { icon, new Grid { Children = { search, placeholder } } } };
         var field = new Border
         {
-            Height = 35, Margin = new Thickness(7, 4, 7, 4), Background = Brushes.White,
+            Height = 35, Margin = new Thickness(7, 4, 7, 4), Background = SoftKeyPopupDesign.CardSurface,
             BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(9),
-            BorderBrush = SoftKeyPopupDesign.Border, Child = content
+            BorderBrush = SoftKeyPopupDesign.ControlOutline, Child = content
         };
         search.GotKeyboardFocus += (_, _) => field.BorderBrush = SoftKeyPopupDesign.Accent;
-        search.LostKeyboardFocus += (_, _) => field.BorderBrush = SoftKeyPopupDesign.Border;
+        search.LostKeyboardFocus += (_, _) => field.BorderBrush = SoftKeyPopupDesign.ControlOutline;
         search.TextChanged += (_, _) => placeholder.Visibility = search.Text.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
         return field;
     }

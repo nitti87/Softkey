@@ -607,7 +607,7 @@ static class StartupChecks
         var failed = window.ApplyAsync(true); Pump();
         service.Pending.SetException(new IOException("Windows kunde inte slutföra ändringen. Försök igen."));
         while (!failed.IsCompleted) Pump(); failed.GetAwaiter().GetResult();
-        Check(window.IsVisible && !window.IsApplying && startupApply.IsEnabled && Field<TextBlock>(window, "status").Foreground == Brushes.Firebrick,
+        Check(window.IsVisible && !window.IsApplying && startupApply.IsEnabled && Field<TextBlock>(window, "status").Foreground == SoftKeyPopupDesign.ErrorText,
             "a failed OK operation leaves the dialog open with a visible error");
         Render(window, Path.Combine(output, "startup-error.png"));
         bool closed = false; window.Closed += (_, _) => closed = true;
@@ -2810,6 +2810,10 @@ static class StartupChecks
                     && frame.Children[0] is DockPanel titleBar
                     && titleBar.Children.OfType<TextBlock>().Single().FontSize == SoftKeyPopupDesign.TitleFontSize,
                     dialog.Title + " has the shared rounded frame, shadow and title size");
+                Check(dialog.Content is Border { Child: StackPanel themedFrame }
+                    && themedFrame.Children[0] is DockPanel title && title.Background == SoftKeyKeyDesign.FunctionFace
+                    && themedFrame.Children[1] is Border body && body.Background == SoftKeyKeyDesign.WindowSurface,
+                    dialog.Title + " uses the warm stone surfaces from the keyboard");
             }
         }
         finally { owner.Close(); }
@@ -3690,9 +3694,14 @@ static class StartupChecks
                 ShowOffscreen(searching);
                 Check(!searching.ShowInTaskbar && !searching.ShowActivated,
                     "update dialog opens without stealing taskbar space or focus");
-                Check(Field<ProgressBar>(searching, "searchProgress").Visibility == Visibility.Visible
+                var searchBar = Field<ProgressBar>(searching, "searchProgress");
+                Check(searchBar.Visibility == Visibility.Visible
                     && Field<TextBlock>(searching, "title").Text.Contains("Söker"),
                     "update dialog shows progress feedback while checking for updates");
+                Check(searchBar.Template.FindName("PART_GlowRect", searchBar) is Border
+                    { Visibility: Visibility.Visible } glow && glow.Background == SoftKeyKeyDesign.SlateAccent
+                    && searchBar.Template.FindName("Fill", searchBar) is Border { Visibility: Visibility.Collapsed },
+                    "the shared progress template shows a slate segment during an indeterminate check");
                 Render(searching, Path.Combine(output, "dialog-update-searching.png"));
 
                 pendingFetch.SetResult(null);
@@ -3744,6 +3753,11 @@ static class StartupChecks
                 progressView.Content.Visibility = Visibility.Visible;
                 progressView.Show(new SoftKeyUpdates.Progress(58, "Hämtar uppdateringen", "SoftKey-update-9.zip  ·  640 KB av 1,1 MB"));
                 Pump();
+                var downloadBar = Field<ProgressBar>(progressView, "bar");
+                Check(downloadBar.Template.FindName("Fill", downloadBar) is Border { Visibility: Visibility.Visible } fill
+                    && fill.Background == SoftKeyKeyDesign.SlateAccent && downloadBar.ActualWidth > 0
+                    && Math.Abs(fill.ActualWidth - downloadBar.ActualWidth * 0.58) <= 2,
+                    "the shared progress template fills the reported share of the download track");
                 Render(availableDialog, Path.Combine(output, "dialog-update-progress.png"));
             }
             finally { availableDialog.Close(); }

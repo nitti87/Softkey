@@ -9,7 +9,8 @@ sealed class SoftKeyUpdateProgressView
 
     readonly TextBlock status = new()
     {
-        Name = "UpdateStatus", FontSize = 15, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap
+        Name = "UpdateStatus", FontSize = 15, FontWeight = FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap,
+        Foreground = SoftKeyPopupDesign.PrimaryText
     };
     readonly TextBlock detail = new()
     {
@@ -20,14 +21,7 @@ sealed class SoftKeyUpdateProgressView
     {
         Name = "UpdateBar", Minimum = 0, Maximum = 100, Height = 6, Margin = new Thickness(0, 12, 0, 0),
         Background = SoftKeyPopupDesign.ActionSurface, Foreground = SoftKeyPopupDesign.Accent,
-        Template = (ControlTemplate)XamlReader.Parse("""
-            <ControlTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" TargetType="{x:Type ProgressBar}">
-                <Border x:Name="PART_Track" Background="{TemplateBinding Background}" CornerRadius="3" ClipToBounds="True">
-                    <Border x:Name="PART_Indicator" Background="{TemplateBinding Foreground}" HorizontalAlignment="Left" CornerRadius="3"/>
-                </Border>
-            </ControlTemplate>
-            """)
+        Template = SoftKeyPopupDesign.ProgressTemplate
     };
 
     public Border Content { get; }

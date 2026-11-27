@@ -25,6 +25,7 @@ static class SoftKeyKeyDesign
     public static readonly Brush PrimaryText = new SolidColorBrush(Color.FromRgb(0x23, 0x21, 0x1E));
     public static readonly Brush SecondaryText = new SolidColorBrush(Color.FromRgb(0x3D, 0x3A, 0x35));
     public static readonly Brush SlateAccent = new SolidColorBrush(Color.FromRgb(0x2B, 0x57, 0x7C));
+    public static readonly Brush SlateOutline = new SolidColorBrush(Color.FromRgb(0x6E, 0x94, 0xB4));
     public static readonly Brush SlateAccentText = new SolidColorBrush(Color.FromRgb(0x1E, 0x3E, 0x5A));
     public static readonly Brush KeyHover = new SolidColorBrush(Color.FromRgb(0xDC, 0xE5, 0xED));
     public static readonly Brush KeyFlash = new SolidColorBrush(Color.FromRgb(0xC9, 0xD9, 0xE6));

@@ -12,8 +12,8 @@ using System.Windows.Threading;
 
 class WordListWindow : Window
 {
-    static readonly Brush MutedText = new SolidColorBrush(Color.FromRgb(0x60, 0x60, 0x60));
-    static readonly Brush Accent = new SolidColorBrush(Color.FromRgb(0x00, 0x67, 0xC0));
+    static readonly Brush MutedText = SoftKeyPopupDesign.SecondaryText;
+    static readonly Brush Accent = SoftKeyPopupDesign.Accent;
     readonly Func<IEnumerable<string>> getWords;
     readonly Func<string, string> addWord, removeWord;
     readonly Func<string, string, string> renameWord;
@@ -176,7 +176,7 @@ class WordListWindow : Window
         inputContent.Children.Add(placeholder);
         var inputBorder = new Border
         {
-            Background = Brushes.White, BorderBrush = SoftKeyPopupDesign.CardBorder,
+            Background = SoftKeyPopupDesign.CardSurface, BorderBrush = SoftKeyPopupDesign.ControlOutline,
             BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(9), MinHeight = 30, Child = inputContent
         };
         wordInput.GotKeyboardFocus += (_, _) =>
@@ -326,8 +326,8 @@ class WordListWindow : Window
         content.Children.Add(inputContent);
         var field = new Border
         {
-            Height = 32, Margin = new Thickness(12, 0, 12, 10), Background = Brushes.White,
-            BorderBrush = SoftKeyPopupDesign.CardBorder, BorderThickness = new Thickness(1),
+            Height = 32, Margin = new Thickness(12, 0, 12, 10), Background = SoftKeyPopupDesign.CardSurface,
+            BorderBrush = SoftKeyPopupDesign.ControlOutline, BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(9), Child = content, RenderTransform = new TranslateTransform()
         };
         searchInput.GotKeyboardFocus += (_, _) =>
@@ -336,7 +336,7 @@ class WordListWindow : Window
             editingInputActive = false;
             field.BorderBrush = Accent;
         };
-        searchInput.LostKeyboardFocus += (_, _) => field.BorderBrush = SoftKeyPopupDesign.CardBorder;
+        searchInput.LostKeyboardFocus += (_, _) => field.BorderBrush = SoftKeyPopupDesign.ControlOutline;
         searchInput.TextChanged += (_, _) =>
         {
             bool empty = searchInput.Text.Length == 0;
@@ -487,7 +487,7 @@ class WordListWindow : Window
         feedback.Text = text;
         feedback.ToolTip = text;
         feedback.Visibility = string.IsNullOrEmpty(text) ? Visibility.Collapsed : Visibility.Visible;
-        feedback.Foreground = error ? new SolidColorBrush(Color.FromRgb(0xB4, 0x23, 0x18)) : MutedText;
+        feedback.Foreground = error ? SoftKeyPopupDesign.ErrorText : MutedText;
         if (feedback.Visibility == Visibility.Visible) feedbackTimer.Start();
     }
 
@@ -573,8 +573,8 @@ class WordListWindow : Window
 
         var editField = new FrameworkElementFactory(typeof(Border), "EditField");
         editField.SetValue(VisibilityProperty, Visibility.Collapsed);
-        editField.SetValue(Border.BackgroundProperty, Brushes.White);
-        editField.SetValue(Border.BorderBrushProperty, SoftKeyPopupDesign.CardBorder);
+        editField.SetValue(Border.BackgroundProperty, SoftKeyPopupDesign.CardSurface);
+        editField.SetValue(Border.BorderBrushProperty, SoftKeyPopupDesign.ControlOutline);
         editField.SetValue(Border.BorderThicknessProperty, new Thickness(1));
         editField.SetValue(Border.CornerRadiusProperty, new CornerRadius(8));
         editField.SetValue(MarginProperty, new Thickness(6, 0, 4, 0));
@@ -671,9 +671,9 @@ class WordListWindow : Window
         template.VisualTree = surface;
         var style = new Style(typeof(Button));
         style.Setters.Add(new Setter(TemplateProperty, template));
-        style.Setters.Add(new Setter(BackgroundProperty, primary ? new SolidColorBrush(Color.FromRgb(0xD9, 0xEA, 0xF7)) : Brushes.Transparent));
-        if (primary) style.Setters.Add(new Setter(ForegroundProperty, new SolidColorBrush(Color.FromRgb(0x1F, 0x3B, 0x53))));
-        style.Setters.Add(new Setter(BorderBrushProperty, primary ? new SolidColorBrush(Color.FromRgb(0x70, 0xA8, 0xD2)) : Brushes.Transparent));
+        style.Setters.Add(new Setter(BackgroundProperty, primary ? SoftKeyPopupDesign.ActionSurface : Brushes.Transparent));
+        if (primary) style.Setters.Add(new Setter(ForegroundProperty, SoftKeyPopupDesign.ActionText));
+        style.Setters.Add(new Setter(BorderBrushProperty, primary ? SoftKeyPopupDesign.ActionBorder : Brushes.Transparent));
         style.Setters.Add(new Setter(BorderThicknessProperty, new Thickness(primary ? 1 : 0)));
         var hovered = new Trigger { Property = IsMouseOverProperty, Value = true };
         hovered.Setters.Add(new Setter(BackgroundProperty, primary ? SoftKeyPopupDesign.ActionHover : SoftKeyPopupDesign.CardSurface));

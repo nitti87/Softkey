@@ -118,7 +118,7 @@ partial class KeyboardWindow
                 TextAlignment = TextAlignment.Center, Margin = new Thickness(0, 5, 0, 0)
             };
             var content = new StackPanel();
-            content.Children.Add(PasswordSuggestionWindow.LockIcon(22));
+            content.Children.Add(PasswordSuggestionWindow.LockIcon(22, SoftKeyPopupDesign.OnAccentText));
             content.Children.Add(caption);
             passwordSuggestionAction = SoftKeyButtonDesign.Action(PasswordSuggestionWindow.ChooseLabel, primary: true,
                 contentAlignment: HorizontalAlignment.Stretch, animateHover: false);

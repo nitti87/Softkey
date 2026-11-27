@@ -300,10 +300,10 @@ sealed class SavedSuggestionsPage : UserControl
         input.BorderThickness = new Thickness(0);
         input.Background = Brushes.Transparent;
         var frame = new Border { Child = input, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(9),
-            Background = Brushes.White, BorderBrush = SoftKeyPopupDesign.CardBorder };
+            Background = SoftKeyPopupDesign.CardSurface, BorderBrush = SoftKeyPopupDesign.ControlOutline };
         frame.SetBinding(VisibilityProperty, new Binding(nameof(Visibility)) { Source = input });
         input.GotKeyboardFocus += (_, _) => frame.BorderBrush = SoftKeyPopupDesign.Accent;
-        input.LostKeyboardFocus += (_, _) => frame.BorderBrush = SoftKeyPopupDesign.CardBorder;
+        input.LostKeyboardFocus += (_, _) => frame.BorderBrush = SoftKeyPopupDesign.ControlOutline;
         return frame;
     }
 
@@ -508,7 +508,7 @@ sealed class SavedSuggestionsPage : UserControl
     static void ShowFeedback(TextBlock feedback, string message = null, bool error = false)
     {
         feedback.Text = message ?? "";
-        feedback.Foreground = error ? Brushes.Firebrick : SoftKeyPopupDesign.PrimaryText;
+        feedback.Foreground = error ? SoftKeyPopupDesign.ErrorText : SoftKeyPopupDesign.PrimaryText;
         feedback.Visibility = message == null ? Visibility.Collapsed : Visibility.Visible;
     }
 }

@@ -19,7 +19,7 @@ sealed class KeyboardSettingsWindow : Window
     internal bool IsSaving { get; private set; }
     readonly TextBlock error = new()
     {
-        Foreground = Brushes.Firebrick, TextWrapping = TextWrapping.Wrap,
+        Foreground = SoftKeyPopupDesign.ErrorText, TextWrapping = TextWrapping.Wrap,
         Margin = new Thickness(2, 8, 2, 0), Visibility = Visibility.Collapsed
     };
 
@@ -281,8 +281,11 @@ sealed class KeyboardSettingsWindow : Window
         slider.IsMoveToPointEnabled = true;
         slider.Template = SliderTemplate;
         slider.Height = 36;
-        slider.Background = SoftKeyPopupDesign.FieldSelected;
+        slider.Background = SoftKeyKeyDesign.TraySurface;
         slider.Foreground = SoftKeyPopupDesign.Accent;
+        slider.Resources["SliderThumb"] = SoftKeyPopupDesign.CardSurface;
+        slider.Resources["SliderThumbHover"] = SoftKeyPopupDesign.ActionSurface;
+        slider.Resources["SliderThumbPressed"] = SoftKeyPopupDesign.ActionHover;
         AutomationProperties.SetName(slider, label);
 
         var amount = new TextBlock { FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = SoftKeyPopupDesign.ActionText };
@@ -362,12 +365,15 @@ sealed class KeyboardSettingsWindow : Window
                             <Thumb.Template>
                                 <ControlTemplate TargetType="{x:Type Thumb}">
                                     <Grid Background="Transparent">
-                                        <Ellipse x:Name="Handle" Width="19" Height="19" Fill="White" StrokeThickness="2"
+                                        <Ellipse x:Name="Handle" Width="19" Height="19" Fill="{DynamicResource SliderThumb}" StrokeThickness="2"
                                                  Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Slider}}"/>
                                     </Grid>
                                     <ControlTemplate.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="Handle" Property="Fill" Value="#D9EAF7"/>
+                                            <Setter TargetName="Handle" Property="Fill" Value="{DynamicResource SliderThumbHover}"/>
+                                        </Trigger>
+                                        <Trigger Property="IsDragging" Value="True">
+                                            <Setter TargetName="Handle" Property="Fill" Value="{DynamicResource SliderThumbPressed}"/>
                                         </Trigger>
                                     </ControlTemplate.Triggers>
                                 </ControlTemplate>

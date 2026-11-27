@@ -2,11 +2,13 @@
 
 **Sparade lösenord** och **Sparade telefonnummer** är referenserna för alla dialogrutor som SoftKey bygger. Återanvänd de gemensamma komponenterna så att ramen, titelraden och hoverläget utvecklas tillsammans.
 
+Dialogerna följer temat **Varm Sten & Skiffer**. `SoftKeyPopupDesign` hämtar de varma ytorna och skifferaccenterna från tangentbordets palett i `SoftKeyKeyDesign`. Använd de delade färgerna även i egna fält, ikoner, listor och reglage. Laddningsindikatorer använder `SoftKeyPopupDesign.ProgressTemplate` för både bestämt och obestämt förlopp.
+
 ## Bygg dialogen uppifrån och ned
 
-1. **Fönster och titelrad.** Sätt `Title` och anropa `SoftKeyPopupDesign.ConfigureWindow(this)`. Sätt sedan `Content` med `SoftKeyPopupDesign.Frame`. Ramen ger rundade hörn, tunn kant, mjuk skugga och en ljus blågrå innehållsyta. Titelraden är dragbar och har titeln till vänster och stängknappen till höger. Titeltexten använder Segoe UI Semibold i storlek 12 via `SoftKeyPopupDesign.TitleFontSize`.
+1. **Fönster och titelrad.** Sätt `Title` och anropa `SoftKeyPopupDesign.ConfigureWindow(this)`. Sätt sedan `Content` med `SoftKeyPopupDesign.Frame`. Ramen ger rundade hörn, tunn kant, mjuk skugga och en varm ljusgrå innehållsyta. Titelraden är dragbar och har titeln till vänster och stängknappen till höger. Titeltexten använder Segoe UI Semibold i storlek 12 via `SoftKeyPopupDesign.TitleFontSize`.
 2. **Innehåll.** Lägg sökning eller filter ovanför resultaten när listan behöver det. Visa listposter och inställningsval som ljusa, rundade kort med tunn kant och luft mellan raderna. Hela kortet är klickbart när det representerar ett val. Visa en huvudrad och en eventuell detaljrad, till exempel namn och telefonnummer. Låt lång text radbrytas och gör långa listor rullningsbara.
-3. **Åtgärder.** Använd `SoftKeyPopupDesign.Sections` när rutan behöver en nedre knapprad. Bygg knapparna med `SoftKeyButtonDesign.Action` och placera dem med `SoftKeyButtonDesign.Row`. Huvudåtgärden har blå ton och ligger längst till höger. Vid stängning av appen eller borttagning är **Avbryt** standardvalet. I en dialog där valet av ett kort slutför åtgärden räcker stängknappen i titelraden.
+3. **Åtgärder.** Använd `SoftKeyPopupDesign.Sections` när rutan behöver en nedre knapprad. Bygg knapparna med `SoftKeyButtonDesign.Action` och placera dem med `SoftKeyButtonDesign.Row`. Huvudåtgärden har skifferblå bakgrund och ljus text och ligger längst till höger. Vid stängning av appen eller borttagning är **Avbryt** standardvalet. I en dialog där valet av ett kort slutför åtgärden räcker stängknappen i titelraden.
 4. **Verkställ.** Använd `SoftKeyButtonDesign.Apply` och håll knappen inaktiv tills en inställning har en ändring kvar att spara. Uppdatera läget vid redigering, återställning och sparande med `SoftKeyButtonDesign.SetApplyState`.
 
 ## Kort och interaktion

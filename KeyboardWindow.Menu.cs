@@ -20,7 +20,7 @@ partial class KeyboardWindow
     static readonly Brush MenuSeparatorBrush = new SolidColorBrush(Color.FromRgb(0xE6, 0xE3, 0xDC));
     static readonly Brush MenuHeaderHover = SoftKeyKeyDesign.HeaderHover;
     static readonly Brush ActiveMenu = SoftKeyKeyDesign.KeyHeld;
-    static readonly Brush ActiveMenuBorder = new SolidColorBrush(Color.FromRgb(0x6E, 0x94, 0xB4));
+    static readonly Brush ActiveMenuBorder = SoftKeyKeyDesign.SlateOutline;
     static readonly Brush ActiveMenuText = SoftKeyKeyDesign.SlateAccentText;
     static readonly ControlTemplate MenuHeaderTemplate = KeyButtonTemplate(cornerRadius: 4);
     static readonly ControlTemplate MenuActionTemplate = KeyButtonTemplate(HorizontalAlignment.Stretch, cornerRadius: 4);

@@ -4,7 +4,6 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Interop;
-using System.Windows.Media;
 
 class StartupSettingsWindow : Window
 {
@@ -22,7 +21,8 @@ class StartupSettingsWindow : Window
     readonly Button apply = SoftKeyButtonDesign.Apply();
     readonly Button cancel = SoftKeyButtonDesign.Action("Avbryt");
     readonly ProgressBar progress = new() { Height = 4, Minimum = 0, Maximum = 100, Foreground = SoftKeyPopupDesign.Accent,
-        Background = SoftKeyPopupDesign.TitleBarSurface, BorderThickness = new Thickness(0), Visibility = Visibility.Hidden };
+        Background = SoftKeyPopupDesign.ActionSurface, Template = SoftKeyPopupDesign.ProgressTemplate,
+        BorderThickness = new Thickness(0), Visibility = Visibility.Hidden };
     readonly TextBlock status = new() { FontSize = 11, TextWrapping = TextWrapping.Wrap, Foreground = SoftKeyPopupDesign.PrimaryText,
         Margin = new Thickness(0, 7, 0, 0), MinHeight = 16 };
     bool busy;
@@ -63,7 +63,7 @@ class StartupSettingsWindow : Window
         }
         catch (Exception ex)
         {
-            status.Text = ex.Message; status.Foreground = Brushes.Firebrick;
+            status.Text = ex.Message; status.Foreground = SoftKeyPopupDesign.ErrorText;
             ok.IsEnabled = apply.IsEnabled = login.IsEnabled = automatic.IsEnabled = afterUnlock.IsEnabled = false;
         }
         foreach (var option in new[] { login, automatic, afterUnlock })
@@ -111,7 +111,7 @@ class StartupSettingsWindow : Window
         }
         catch (Exception ex)
         {
-            status.Foreground = Brushes.Firebrick;
+            status.Foreground = SoftKeyPopupDesign.ErrorText;
             status.Text = ex is OperationCanceledException ? "Ändringen tog för lång tid. Kontrollera startinställningarna innan du försöker igen." : ex.Message;
         }
         finally { SetBusy(false); }

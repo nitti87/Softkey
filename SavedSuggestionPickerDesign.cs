@@ -96,7 +96,7 @@ static class SavedSuggestionPickerDesign
         hoverLayer.SetValue(UIElement.OpacityProperty, 0.0);
         hoverLayer.SetValue(UIElement.EffectProperty, new DropShadowEffect
         {
-            Color = Color.FromRgb(0x28, 0x51, 0x6D), Opacity = 0.28, BlurRadius = 9,
+            Color = ((SolidColorBrush)SoftKeyPopupDesign.ActionText).Color, Opacity = 0.28, BlurRadius = 9,
             ShadowDepth = 3, Direction = 270
         });
         layers.AppendChild(hoverLayer);

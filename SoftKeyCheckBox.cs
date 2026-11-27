@@ -7,8 +7,6 @@ using System.Windows.Shapes;
 // Gemensam checkbox med layout för menyer och inställningsrutor.
 class SoftKeyCheckBox : CheckBox
 {
-    static readonly Brush Ink = new SolidColorBrush(Color.FromRgb(0x29, 0x39, 0x48));
-    static readonly Brush Outline = new SolidColorBrush(Color.FromRgb(0x72, 0x7C, 0x87));
     static readonly ControlTemplate MenuTemplate = CreateTemplate(menu: true);
     static readonly ControlTemplate OptionTemplate = CreateTemplate(menu: false);
     static readonly ControlTemplate SettingsRowTemplate = CreateTemplate(menu: false, settingsRow: true);
@@ -16,7 +14,7 @@ class SoftKeyCheckBox : CheckBox
 
     SoftKeyCheckBox()
     {
-        Foreground = Ink;
+        Foreground = SoftKeyPopupDesign.PrimaryText;
         VerticalContentAlignment = VerticalAlignment.Center;
     }
 
@@ -51,7 +49,7 @@ class SoftKeyCheckBox : CheckBox
 
     public static RadioButton RadioRow(string groupName, UIElement content) => new()
     {
-        GroupName = groupName, Content = content, Template = RadioRowTemplate, Foreground = Ink,
+        GroupName = groupName, Content = content, Template = RadioRowTemplate, Foreground = SoftKeyPopupDesign.PrimaryText,
         Padding = new Thickness(10, 7, 10, 7), MinHeight = 46, FontSize = 13,
         HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Center
     };
@@ -66,7 +64,7 @@ class SoftKeyCheckBox : CheckBox
         content.Children.Add(new TextBlock
         {
             Text = description, FontSize = 11,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x50, 0x59, 0x62)),
+            Foreground = SoftKeyPopupDesign.SecondaryText,
             Margin = new Thickness(0, 2, 0, 0), TextWrapping = TextWrapping.Wrap
         });
         return content;
@@ -102,8 +100,8 @@ class SoftKeyCheckBox : CheckBox
         box.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 0, settingsRow ? 12 : menu ? 8 : 10, 0));
         box.SetValue(Border.CornerRadiusProperty, new CornerRadius(radio ? 9 : settingsRow ? 3 : menu ? 4 : 5));
         box.SetValue(Border.BorderThicknessProperty, new Thickness(1));
-        box.SetValue(Border.BorderBrushProperty, Outline);
-        if (menu || settingsRow) box.SetValue(Border.BackgroundProperty, Brushes.White);
+        box.SetValue(Border.BorderBrushProperty, SoftKeyPopupDesign.ControlOutline);
+        box.SetValue(Border.BackgroundProperty, SoftKeyPopupDesign.CardSurface);
 
         var mark = new FrameworkElementFactory(radio ? typeof(Ellipse) : typeof(Path));
         mark.Name = "Mark";
@@ -111,11 +109,11 @@ class SoftKeyCheckBox : CheckBox
         mark.SetValue(FrameworkElement.HeightProperty, radio ? 8.0 : 10.0);
         mark.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
         mark.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
-        if (radio) mark.SetValue(Shape.FillProperty, Brushes.White);
+        if (radio) mark.SetValue(Shape.FillProperty, SoftKeyPopupDesign.OnAccentText);
         else
         {
             mark.SetValue(Path.DataProperty, Geometry.Parse("M 0,4 L 3.5,7.5 L 10,0"));
-            mark.SetValue(Path.StrokeProperty, Brushes.White);
+            mark.SetValue(Path.StrokeProperty, SoftKeyPopupDesign.OnAccentText);
             mark.SetValue(Path.StrokeThicknessProperty, 2.0);
             mark.SetValue(Path.StretchProperty, Stretch.Uniform);
             mark.SetValue(Path.StrokeStartLineCapProperty, PenLineCap.Round);
@@ -135,8 +133,8 @@ class SoftKeyCheckBox : CheckBox
 
         var checkedState = new Trigger { Property = IsCheckedProperty, Value = true };
         checkedState.Setters.Add(new Setter(UIElement.VisibilityProperty, Visibility.Visible, "Mark"));
-        checkedState.Setters.Add(new Setter(Border.BackgroundProperty, Ink, "Box"));
-        checkedState.Setters.Add(new Setter(Border.BorderBrushProperty, Ink, "Box"));
+        checkedState.Setters.Add(new Setter(Border.BackgroundProperty, SoftKeyPopupDesign.Accent, "Box"));
+        checkedState.Setters.Add(new Setter(Border.BorderBrushProperty, SoftKeyPopupDesign.Accent, "Box"));
         if (!menu)
         {
             checkedState.Setters.Add(new Setter(rowBackground, SoftKeyPopupDesign.FieldSelected, "Root"));
@@ -154,7 +152,7 @@ class SoftKeyCheckBox : CheckBox
         template.Triggers.Add(pressed);
 
         var focused = new Trigger { Property = IsKeyboardFocusedProperty, Value = true };
-        focused.Setters.Add(new Setter(rowBorder, menu ? Ink : SoftKeyPopupDesign.Accent, "Root"));
+        focused.Setters.Add(new Setter(rowBorder, SoftKeyPopupDesign.Accent, "Root"));
         template.Triggers.Add(focused);
 
         var disabled = new Trigger { Property = IsEnabledProperty, Value = false };
