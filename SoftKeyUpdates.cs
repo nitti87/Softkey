@@ -197,22 +197,20 @@ static class SoftKeyUpdates
 
     static string Parameters(object data)
     {
-        string json = Convert.ToBase64String(JsonSerializer.SerializeToUtf8Bytes(data));
+        string json = JsonSerializer.Serialize(data).Replace("'", "''", StringComparison.Ordinal);
         return "$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; [Console]::OutputEncoding=[Text.UTF8Encoding]::new($false); "
-            + "$updateParameters=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('"
-            + json + "')) | ConvertFrom-Json;\n";
+            + "$updateParameters='" + json + "' | ConvertFrom-Json;\n";
     }
 
     static ProcessStartInfo StartInfo(string script)
     {
-        // Compress the embedded scripts to stay within Windows' command-line length limit.
+        // Compress the embedded scripts and pass pure ASCII to -Command to stay well under Windows' command-line limit.
         using var bytes = new MemoryStream();
-        using (var gzip = new GZipStream(bytes, CompressionLevel.Optimal, leaveOpen: true)) gzip.Write(Utf8.GetBytes(script));
+        using (var gzip = new GZipStream(bytes, CompressionLevel.SmallestSize, leaveOpen: true)) gzip.Write(Utf8.GetBytes(script));
         string inner = "$b=[Convert]::FromBase64String('" + Convert.ToBase64String(bytes.ToArray()) + "');"
             + "$s=[IO.Compression.GZipStream]::new([IO.MemoryStream]::new($b),[IO.Compression.CompressionMode]::Decompress);"
-            + "$r=[IO.StreamReader]::new($s);try{& ([scriptblock]::Create($r.ReadToEnd()))}finally{$r.Dispose()}";
-        string encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(inner));
-        return new ProcessStartInfo(PowerShell, "-NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand " + encoded)
+            + "$r=[IO.StreamReader]::new($s,[Text.Encoding]::UTF8);try{& ([scriptblock]::Create($r.ReadToEnd()))}finally{$r.Dispose()}";
+        return new ProcessStartInfo(PowerShell, "-NoProfile -NonInteractive -WindowStyle Hidden -Command \"" + inner + "\"")
         { UseShellExecute = false, CreateNoWindow = true, WindowStyle = ProcessWindowStyle.Hidden };
     }
 }

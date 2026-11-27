@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 [CmdletBinding(DefaultParameterSetName = 'GitHub')]
 param(
     [Parameter(Mandatory)][string]$PackagePath,
@@ -36,7 +36,7 @@ try {
         if ($existingReleases.Count -gt 1) { throw "More than one release uses $tag." }
         $release = $existingReleases | Select-Object -First 1
         if (-not $release) {
-            $body = @{
+            $body = [Text.Encoding]::UTF8.GetBytes((@{
                 tag_name = $tag
                 target_commitish = $manifest.Commit
                 name = "SoftKey test build $($manifest.BuildNumber)"
@@ -46,9 +46,9 @@ try {
                 draft = $true
                 prerelease = $true
                 make_latest = 'false'
-            } | ConvertTo-Json -Compress
+            } | ConvertTo-Json -Compress))
             $release = Invoke-RestMethod -Uri "$softKeyReleaseApi/releases" -Method Post -Body $body `
-                -ContentType 'application/json' -Headers $headers -UseBasicParsing -MaximumRedirection 0 -TimeoutSec 25
+                -ContentType 'application/json; charset=utf-8' -Headers $headers -UseBasicParsing -MaximumRedirection 0 -TimeoutSec 25
         }
         if ($release.id -lt 1 -or $release.tag_name -cne $tag -or $release.prerelease -ne $true -or
             $release.target_commitish -cne $manifest.Commit) {
@@ -73,9 +73,9 @@ try {
             -Certificate $certificate -BuildNumber $manifest.BuildNumber -Commit $manifest.Commit
 
         if ($PublishPreview -and $release.draft) {
-            $body = @{draft=$false; prerelease=$true; make_latest='false'} | ConvertTo-Json -Compress
+            $body = [Text.Encoding]::UTF8.GetBytes((@{draft=$false; prerelease=$true; make_latest='false'} | ConvertTo-Json -Compress))
             $release = Invoke-RestMethod -Uri "$softKeyReleaseApi/releases/$($release.id)" -Method Patch -Body $body `
-                -ContentType 'application/json' -Headers $headers -UseBasicParsing -MaximumRedirection 0 -TimeoutSec 25
+                -ContentType 'application/json; charset=utf-8' -Headers $headers -UseBasicParsing -MaximumRedirection 0 -TimeoutSec 25
             if ($release.draft -ne $false -or $release.prerelease -ne $true) { throw 'GitHub did not confirm publication of the preview.' }
         }
 

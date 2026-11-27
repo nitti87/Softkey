@@ -401,6 +401,49 @@ static class Program
             && words.Contains("kontrollord"),
             "transient error recovery resets interaction state without altering personal words");
 
+        var progressViewType = assembly.GetType("SoftKeyUpdateProgressView", true);
+        string progressXaml = (string)progressViewType.GetMethod("InstallationContent").Invoke(null, new object[] { 488.0 });
+        var updatesType = assembly.GetType("SoftKeyUpdates", true);
+        var resMethod = updatesType.GetMethod("Resource", BindingFlags.Static | BindingFlags.NonPublic);
+        var paramMethod = updatesType.GetMethod("Parameters", BindingFlags.Static | BindingFlags.NonPublic);
+        var startInfoMethod = updatesType.GetMethod("StartInfo", BindingFlags.Static | BindingFlags.NonPublic);
+        string fullInstallScript = (string)paramMethod.Invoke(null, new object[]
+        {
+            new
+            {
+                PackagePath = @"C:\Users\nitti\AppData\Local\SoftKey\Updates\SoftKey-update-5.zip",
+                BuildNumber = 5L,
+                Commit = new string('a', 40),
+                InstalledBuild = 0L,
+                DesktopProcess = 1234,
+                DesktopStarted = 123456L,
+                ProgressContent = progressXaml,
+                Left = 100.0,
+                Top = 100.0
+            }
+        })
+            + (string)resMethod.Invoke(null, new object[] { "SoftKey.UpdatePackage.ps1" })
+            + (string)resMethod.Invoke(null, new object[] { "SoftKey.InstallProgress.ps1" })
+            + "\nInvoke-SoftKeyInstallWithProgress {\n"
+            + (string)resMethod.Invoke(null, new object[] { "SoftKey.ApplyUpdate.ps1" })
+            + "\n}\n";
+        var installPsi = (ProcessStartInfo)startInfoMethod.Invoke(null, new object[] { fullInstallScript });
+        Check(installPsi.Arguments.Length < 16_000,
+            $"update install worker command stays well below Windows' limit ({installPsi.Arguments.Length} chars)");
+
+        string roundTripScript = (string)paramMethod.Invoke(null, new object[] { new { Text = "åäö • test 'quote'" } })
+            + "Write-Output $updateParameters.Text";
+        var roundTripPsi = (ProcessStartInfo)startInfoMethod.Invoke(null, new object[] { roundTripScript });
+        roundTripPsi.RedirectStandardOutput = true;
+        roundTripPsi.StandardOutputEncoding = System.Text.Encoding.UTF8;
+        using (var probe = Process.Start(roundTripPsi))
+        {
+            string stdout = probe.StandardOutput.ReadToEnd().Trim();
+            probe.WaitForExit(10_000);
+            Check(probe.ExitCode == 0 && stdout == "åäö • test 'quote'",
+                "compressed PowerShell launcher preserves UTF-8 text and quotes");
+        }
+
         Set(window, "closeConfirmed", true);
         window.Close();
         foreach (string file in Directory.GetFiles(folder)) File.Delete(file);
