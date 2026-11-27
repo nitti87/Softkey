@@ -761,7 +761,30 @@ static class StartupChecks
             Check(phoneKey.IsVisible && Math.Abs(phoneKey.ActualHeight - pageDown.ActualHeight) <= 1
                 && Math.Abs(phoneKey.ActualWidth - pageDown.ActualWidth) <= 1,
                 "the rendered phone key is the same size as Page Down within layout rounding");
+            var handset = (System.Windows.Shapes.Path)((Viewbox)phoneKey.Content).Child;
+            Check(handset.Fill == null && handset.Stroke == SoftKeyKeyDesign.SlateAccentText
+                && handset.StrokeLineJoin == PenLineJoin.Round && !handset.IsHitTestVisible,
+                "the phone key has a rounded slate outline and leaves hit testing to the key");
+            Check(HandsetFits(), "the phone outline is centered on the normal-sized key");
             Render(keyboard, Path.Combine(output, "phone-key-shadow.png"));
+
+            keyboard.Width = keyboard.MinWidth;
+            keyboard.Height = keyboard.MinHeight;
+            Pump();
+            keyboard.UpdateLayout();
+            Check(phoneKey.IsVisible && HandsetFits(), "the phone outline fits at the keyboard's minimum size");
+            Render(keyboard, Path.Combine(output, "phone-key-small.png"));
+
+            bool HandsetFits()
+            {
+                var outline = handset.RenderedGeometry.GetRenderBounds(new Pen(handset.Stroke, handset.StrokeThickness));
+                var ink = handset.TransformToAncestor(phoneKey).TransformBounds(outline);
+                var key = new Rect(phoneKey.RenderSize);
+                key.Inflate(-2, -2);
+                return ink.Width >= 8 && key.Contains(ink)
+                    && Math.Abs(ink.Left + ink.Width / 2 - phoneKey.ActualWidth / 2) <= 1.5
+                    && Math.Abs(ink.Top + ink.Height / 2 - phoneKey.ActualHeight / 2) <= 1.5;
+            }
         }
         finally
         {

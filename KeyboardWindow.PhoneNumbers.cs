@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using System.Windows.Threading;
@@ -19,14 +20,11 @@ partial class KeyboardWindow
     {
         if (secureMode) return;
         int separatorRow = navigation.RowDefinitions.Count - 2;
-        phoneNumberKey = Btn(PhoneNumberWindow.ChooseLabel, SoftKeyKeyDesign.SecondaryText, OpenPhoneNumberWindow);
-        var handset = new Path
-        {
-            Width = 14, Height = 14, Margin = new Thickness(1), Stretch = Stretch.Uniform,
-            Fill = SoftKeyKeyDesign.SecondaryText,
-            Data = Geometry.Parse("M 6.6,2.6 C 4.8,2.3 3,3.9 3,6 C 3,13.7 10.3,21 18,21 C 20.1,21 21.7,19.2 21.4,17.4 L 21.2,16.1 C 21.1,15.6 20.8,15.3 20.3,15.2 L 16.4,14.2 C 15.9,14.1 15.5,14.2 15.2,14.6 L 13.7,16.1 C 11.2,14.8 9.2,12.8 7.9,10.3 L 9.4,8.8 C 9.8,8.5 9.9,8.1 9.8,7.6 L 8.8,3.7 C 8.7,3.2 8.4,2.9 7.9,2.8 Z")
-        };
-        phoneNumberKey.Content = new Viewbox { Width = 16, Height = 16, Child = handset, IsHitTestVisible = false };
+        phoneNumberKey = Btn(PhoneNumberWindow.ChooseLabel, SoftKeyKeyDesign.SlateAccentText, OpenPhoneNumberWindow);
+        var handset = PhoneNumberWindow.PhoneIcon(20);
+        handset.Stretch = Stretch.None;
+        handset.SetBinding(Shape.StrokeProperty, new Binding(nameof(Foreground)) { Source = phoneNumberKey });
+        phoneNumberKey.Content = new Viewbox { Width = 20, Height = 20, Child = handset, IsHitTestVisible = false };
         RefreshButtonVisual(phoneNumberKey, false);
         phoneNumberKey.ToolTip = PhoneNumberWindow.ChooseLabel;
         phoneNumberKey.Visibility = Visibility.Hidden;
@@ -35,7 +33,7 @@ partial class KeyboardWindow
         var separator = SoftKeyPopupDesign.Separator(new Thickness(7, 0, 7, 0));
         separator.VerticalAlignment = VerticalAlignment.Center;
         separator.SetBinding(VisibilityProperty,
-            new System.Windows.Data.Binding(nameof(Visibility)) { Source = phoneNumberKey });
+            new Binding(nameof(Visibility)) { Source = phoneNumberKey });
         Grid.SetRow(separator, separatorRow);
         Grid.SetRow(phoneNumberKey, separatorRow + 1);
         navigation.Children.Add(separator);

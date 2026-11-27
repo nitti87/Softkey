@@ -28,7 +28,11 @@ sealed record SavedPhoneNumber(SavedTextEntry Entry, string Number)
 sealed class PhoneNumberWindow : Window
 {
     public const string ChooseLabel = "Välj sparat telefonnummer";
-    internal const string PhoneIconGeometry = "M 3,2 L 7,1 L 9,6 L 6,8 Q 8,12 12,14 L 14,11 L 19,13 L 18,17 Q 17,20 14,18 Q 5,15 2,6 Q 1,3 3,2 Z";
+    internal const string PhoneIconGeometry =
+        "M 6.3,2.6 H 4.6 C 3.5,2.6 2.6,3.5 2.6,4.6 C 2.6,11.7 8.3,17.4 15.4,17.4 " +
+        "C 16.5,17.4 17.4,16.5 17.4,15.4 V 13.7 Q 17.4,13.1 16.8,12.9 L 14.1,12.1 " +
+        "Q 13.5,11.9 13.1,12.35 L 11.7,13.75 C 9.3,12.55 7.45,10.7 6.25,8.3 " +
+        "L 7.65,6.9 Q 8.1,6.5 7.9,5.9 L 7.1,3.2 Q 6.9,2.6 6.3,2.6 Z";
     readonly SavedPhoneNumber[] numbers;
     readonly Func<SavedPhoneNumber, Task<string>> insert;
     readonly TextBox search = new()
@@ -145,7 +149,7 @@ sealed class PhoneNumberWindow : Window
     {
         Width = size, Height = size, Stretch = Stretch.Uniform, IsHitTestVisible = false,
         HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-        Stroke = SoftKeyPopupDesign.ActionText, StrokeThickness = 1.65,
+        Stroke = SoftKeyPopupDesign.ActionText, StrokeThickness = 1.8,
         StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round, StrokeLineJoin = PenLineJoin.Round,
         Data = Geometry.Parse(PhoneIconGeometry)
     };
