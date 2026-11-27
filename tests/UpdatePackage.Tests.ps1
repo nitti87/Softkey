@@ -1,4 +1,4 @@
-$ErrorActionPreference = 'Stop'
+﻿$ErrorActionPreference = 'Stop'
 . (Join-Path (Split-Path -Parent $PSScriptRoot) 'SoftKey.UpdateDistribution.ps1')
 
 function Assert-UpdateRejected([scriptblock]$Check, [string]$Message) {
@@ -51,6 +51,58 @@ function Assert-UpdateRejected([scriptblock]$Check, [string]$Message) {
         }
         Write-Output 'PASS reused one browser sign-in for subsequent GitHub operations'
     } finally { $env:GCM_INTERACTIVE = $previousInteractive }
+}
+
+& {
+    $repoRoot = Split-Path -Parent $PSScriptRoot
+    foreach ($scriptName in 'Start-SoftKeyDelivery.ps1', 'Publish-SoftKeyUpdatePackage.ps1', 'SoftKey.GitHub.ps1') {
+        $parseErrors = $null
+        $null = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot $scriptName), [ref]$null, [ref]$parseErrors)
+        if ($parseErrors.Count -gt 0) { throw "Syntax error in ${scriptName}: $($parseErrors[0].Message)" }
+    }
+    . (Join-Path $repoRoot 'SoftKey.GitHub.ps1')
+    if ($null -ne (Format-SoftKeyDeliveryReleaseNotes @('', '   '))) { throw 'Empty subjects must return null release notes.' }
+    $formatted = Format-SoftKeyDeliveryReleaseNotes @('  Förbättrat kraschskydd  ', '', 'Tydligare pil vid Arkiv')
+    if ($formatted -cne "• Förbättrat kraschskydd`n• Tydligare pil vid Arkiv") {
+        throw "Unexpected formatted release notes: $formatted"
+    }
+    $oversized = Format-SoftKeyDeliveryReleaseNotes @(('å' * 13000))
+    if ($oversized.Length -gt 12000) { throw 'Release notes exceeded GitHub validation limit.' }
+
+    $gitExe = Get-SoftKeyGitPath
+    $tmpRepo = Join-Path ([IO.Path]::GetTempPath()) ('SoftKey-notes-git-' + [Guid]::NewGuid().ToString('N'))
+    $null = New-Item -ItemType Directory -Path $tmpRepo
+    try {
+        $null = & $gitExe -C $tmpRepo init --quiet
+        if ($LASTEXITCODE -ne 0) { throw 'Could not initialize temporary git repo.' }
+        [IO.File]::WriteAllText((Join-Path $tmpRepo 'a.txt'), '1')
+        $null = & $gitExe -C $tmpRepo add a.txt
+        $null = & $gitExe -C $tmpRepo -c user.name=Test -c user.email=test@example.invalid commit --quiet -m 'Basversion'
+        $baseCommit = (& $gitExe -C $tmpRepo rev-parse HEAD).Trim()
+
+        [IO.File]::WriteAllText((Join-Path $tmpRepo 'a.txt'), '2')
+        $null = & $gitExe -C $tmpRepo add a.txt
+        $null = & $gitExe -C $tmpRepo -c user.name=Test -c user.email=test@example.invalid commit --quiet -m 'Förbättrad åäö-hantering'
+        [IO.File]::WriteAllText((Join-Path $tmpRepo 'a.txt'), '3')
+        $null = & $gitExe -C $tmpRepo add a.txt
+        $null = & $gitExe -C $tmpRepo -c user.name=Test -c user.email=test@example.invalid commit --quiet -m 'Smidigare uppdateringsflöde'
+        $headCommit = (& $gitExe -C $tmpRepo rev-parse HEAD).Trim()
+
+        $rangeNotes = Get-SoftKeyDeliveryReleaseNotes -GitPath $gitExe -RepositoryPath $tmpRepo -HeadCommit $headCommit -PreviousCommit $baseCommit
+        if ($rangeNotes -cne "• Smidigare uppdateringsflöde`n• Förbättrad åäö-hantering") {
+            throw "Unexpected range release notes: $rangeNotes"
+        }
+        $singleNotes = Get-SoftKeyDeliveryReleaseNotes -GitPath $gitExe -RepositoryPath $tmpRepo -HeadCommit $headCommit -PreviousCommit $null
+        if ($singleNotes -cne '• Smidigare uppdateringsflöde') {
+            throw "Unexpected single-commit release notes: $singleNotes"
+        }
+        if ($null -ne (Get-SoftKeyDeliveryReleaseNotes -GitPath $gitExe -RepositoryPath $tmpRepo -HeadCommit 'not-a-sha' -PreviousCommit $baseCommit)) {
+            throw 'Invalid commit hash must return null.'
+        }
+        Write-Output 'PASS delivery scripts parse cleanly and generate UTF-8 Swedish release notes from Git commits'
+    } finally {
+        if (Test-Path -LiteralPath $tmpRepo) { Remove-Item -LiteralPath $tmpRepo -Recurse -Force }
+    }
 }
 
 $scratch = Join-Path ([IO.Path]::GetTempPath()) ('SoftKey-package-checks-' + [Guid]::NewGuid().ToString('N'))

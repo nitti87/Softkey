@@ -26,13 +26,34 @@ function Get-DeliveryRun([hashtable]$Headers) {
 }
 
 if (-not $Configure -and -not $Once) { throw 'Choose -Configure or -Once.' }
+if ($Configure) {
+    $tool = (Get-Item -LiteralPath $SignToolPath).FullName
+    $principal = [Security.Principal.WindowsPrincipal]::new([Security.Principal.WindowsIdentity]::GetCurrent())
+    if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        $arguments = '-NoProfile -ExecutionPolicy RemoteSigned -File "{0}" -Configure -SignToolPath "{1}"' -f $PSCommandPath, $tool
+        $worker = Start-Process -FilePath $powershell -Verb RunAs -WindowStyle Hidden -PassThru -ArgumentList $arguments
+        $worker.WaitForExit()
+        if ($worker.ExitCode -ne 0) {
+            $detail = if (Test-Path -LiteralPath $status) {
+                try { (Get-Content -LiteralPath $status -Raw | ConvertFrom-Json).Message } catch { $null }
+            } else { $null }
+            if ($detail) { throw "SoftKey delivery configuration failed: $detail" }
+            throw "SoftKey delivery configuration failed with exit code $($worker.ExitCode)."
+        }
+        Write-Output 'SoftKey delivery is configured and the first check has started.'
+        return
+    }
+}
 $null = New-Item -ItemType Directory -Path $data -Force
 $headers = $null
 $run = $null
 $token = $null
 try {
     if ($Configure) {
-        $tool = (Get-Item -LiteralPath $SignToolPath).FullName
+        $signingCert = Get-Item -LiteralPath 'Cert:\LocalMachine\My\093405919B8DF0EF0F13D124D7DB22FE685979BB' -ErrorAction SilentlyContinue
+        if (-not $signingCert -or -not $signingCert.HasPrivateKey) {
+            throw 'The local SoftKey signing certificate with private key was not found in LocalMachine\My.'
+        }
     } else {
         $saved = Get-Content -LiteralPath $configuration -Raw | ConvertFrom-Json
         $tool = $saved.SignToolPath
@@ -50,9 +71,8 @@ try {
         Write-DeliveryJson $configuration @{SignToolPath=$tool}
         $action = New-ScheduledTaskAction -Execute $powershell -WorkingDirectory $PSScriptRoot `
             -Argument ('-NoProfile -NonInteractive -ExecutionPolicy RemoteSigned -WindowStyle Hidden -File "{0}" -Once' -f $PSCommandPath)
-        $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) `
-            -RepetitionInterval (New-TimeSpan -Minutes 5) -RepetitionDuration (New-TimeSpan -Days 3650)
-        $owner = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().User.Value) -LogonType Interactive -RunLevel Limited
+        $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 5)
+        $owner = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Highest
         $settings = New-ScheduledTaskSettingsSet -MultipleInstances IgnoreNew -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 20) `
             -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
         Register-ScheduledTask -TaskName 'SoftKey-DeliverUpdates' -Action $action -Trigger $trigger -Principal $owner -Settings $settings -Force | Out-Null
@@ -65,9 +85,9 @@ try {
     $previous = if (Test-Path -LiteralPath $status) { Get-Content -LiteralPath $status -Raw | ConvertFrom-Json } else { $null }
     if ($previous.State -eq 'Published' -and $previous.Build -ge $run.run_number) { return }
     if ($run.run_number -lt 1) { throw 'GitHub returned an invalid build number.' }
+    $git = Get-SoftKeyGitPath
     $package = Join-Path $PSScriptRoot "obj\Updates\SoftKey-update-$($run.run_number).zip"
     if (-not (Test-Path -LiteralPath $package)) {
-        $git = Get-SoftKeyGitPath
         $origin = & $git -C $PSScriptRoot remote get-url origin
         if ($LASTEXITCODE -ne 0 -or $origin -ine "https://github.com/$repo.git") { throw 'Unexpected Git remote for the signing checkout.' }
         $previousPrompt = $env:GIT_TERMINAL_PROMPT
@@ -91,10 +111,13 @@ try {
     if ($manifest.Commit -cne $run.head_sha -or $manifest.BuildNumber -ne $run.run_number) {
         throw 'The signed package does not match the selected successful push.'
     }
+    $releaseNotes = Get-SoftKeyDeliveryReleaseNotes -GitPath $git -RepositoryPath $PSScriptRoot -HeadCommit $run.head_sha -PreviousCommit $previous.Commit
     $previousContentsToken = $env:SOFTKEY_GITHUB_CONTENTS_TOKEN
     $env:SOFTKEY_GITHUB_CONTENTS_TOKEN = $headers.Authorization.Substring('Bearer '.Length)
     try {
-        $delivery = & (Join-Path $PSScriptRoot 'Publish-SoftKeyUpdatePackage.ps1') -PackagePath $package -PublishPreview
+        $publishArgs = @{ PackagePath = $package; PublishPreview = $true }
+        if ($releaseNotes) { $publishArgs.ReleaseNotes = $releaseNotes }
+        $delivery = & (Join-Path $PSScriptRoot 'Publish-SoftKeyUpdatePackage.ps1') @publishArgs
     } finally { $env:SOFTKEY_GITHUB_CONTENTS_TOKEN = $previousContentsToken }
     if ($delivery.Status -ne 'Preview' -or $delivery.Commit -cne $run.head_sha -or $delivery.BuildNumber -ne $run.run_number) {
         throw 'GitHub did not confirm the selected update.'
