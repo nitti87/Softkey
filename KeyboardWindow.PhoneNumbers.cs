@@ -21,10 +21,17 @@ partial class KeyboardWindow
         if (secureMode) return;
         int separatorRow = navigation.RowDefinitions.Count - 2;
         phoneNumberKey = Btn(PhoneNumberWindow.ChooseLabel, SoftKeyKeyDesign.SlateAccentText, OpenPhoneNumberWindow);
-        var handset = PhoneNumberWindow.PhoneIcon(20);
-        handset.Stretch = Stretch.None;
-        handset.SetBinding(Shape.StrokeProperty, new Binding(nameof(Foreground)) { Source = phoneNumberKey });
-        phoneNumberKey.Content = new Viewbox { Width = 20, Height = 20, Child = handset, IsHitTestVisible = false };
+        var card = new Path
+        {
+            Width = 20, Height = 20,
+            Data = Geometry.Parse("M 4,4.5 H 16 Q 18,4.5 18,6.5 V 13.5 Q 18,15.5 16,15.5 H 4 Q 2,15.5 2,13.5 V 6.5 Q 2,4.5 4,4.5 Z " +
+                "M 7.1,7.1 A 1.3,1.3 0 1 1 7.1,9.7 A 1.3,1.3 0 1 1 7.1,7.1 Z M 4.9,12.8 Q 7.1,10.1 9.3,12.8 M 12,8.6 H 15.4 M 12,11.4 H 15.4"),
+            StrokeThickness = 1.65, StrokeLineJoin = PenLineJoin.Round,
+            StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
+            IsHitTestVisible = false
+        };
+        card.SetBinding(Shape.StrokeProperty, new Binding(nameof(Foreground)) { Source = phoneNumberKey });
+        phoneNumberKey.Content = new Viewbox { Width = 20, Height = 20, Child = card, IsHitTestVisible = false };
         RefreshButtonVisual(phoneNumberKey, false);
         phoneNumberKey.ToolTip = PhoneNumberWindow.ChooseLabel;
         phoneNumberKey.Visibility = Visibility.Hidden;

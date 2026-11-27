@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -86,9 +87,11 @@ static class SoftKeyUpdates
         public string Digest { get; set; }
     }
 
-    public static async Task<Preview> CheckAsync(CancellationToken cancel)
+    public static async Task<Preview> CheckAsync(CancellationToken cancel) =>
+        await CheckAsync(Client, InstalledBuild(), cancel).ConfigureAwait(false);
+
+    internal static async Task<Preview> CheckAsync(HttpClient client, long installedBuild, CancellationToken cancel)
     {
-        long installedBuild = InstalledBuild();
         var releases = new List<GitHubRelease>();
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancel);
         timeout.CancelAfter(TimeSpan.FromSeconds(25));
@@ -97,12 +100,13 @@ static class SoftKeyUpdates
         while (true)
         {
             using var request = new HttpRequestMessage(HttpMethod.Get, $"{ReleasesApi}?per_page=100&page={page}");
+            request.Headers.CacheControl = new CacheControlHeaderValue { NoCache = true };
             request.Headers.Add("Accept", "application/vnd.github+json");
             request.Headers.Add("X-GitHub-Api-Version", "2022-11-28");
-            using var response = await Client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
             if (response.StatusCode != HttpStatusCode.OK)
                 throw new IOException("Det gick inte att söka efter uppdateringar. Försök igen.");
-            string json = await response.Content.ReadAsStringAsync(timeout.Token);
+            string json = await response.Content.ReadAsStringAsync(timeout.Token).ConfigureAwait(false);
             var batch = JsonSerializer.Deserialize<GitHubRelease[]>(json, JsonOptions) ?? Array.Empty<GitHubRelease>();
             releases.AddRange(batch);
             if (batch.Length < 100 || page >= 20) break;

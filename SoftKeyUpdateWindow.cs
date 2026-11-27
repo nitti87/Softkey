@@ -273,23 +273,36 @@ sealed class SoftKeyUpdateWindow : Window
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-        var icon = MiniIcon(ShieldInfoOutline, 15, SoftKeyPopupDesign.ActionText, new Thickness(0, 1.5, 9, 0));
+        var icon = MiniIcon(ShieldInfoOutline, 17, SoftKeyPopupDesign.Accent, new Thickness(0, 1, 10, 0));
         icon.VerticalAlignment = VerticalAlignment.Top;
         grid.Children.Add(icon);
 
-        var message = new TextBlock
+        var message = new StackPanel
         {
-            Text = "Dina inställningar, sparade ord och inloggningsläget bevaras. SoftKey startar om automatiskt.",
-            FontSize = 11.5, Foreground = SoftKeyPopupDesign.ActionText,
-            TextWrapping = TextWrapping.Wrap, LineHeight = 16
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = "Inställningar, sparade ord och inloggningsläge bevaras.",
+                    FontSize = 13.5, FontWeight = FontWeights.SemiBold, Foreground = SoftKeyPopupDesign.PrimaryText,
+                    TextWrapping = TextWrapping.Wrap, LineHeight = 18
+                },
+                new TextBlock
+                {
+                    Text = "SoftKey startar om automatiskt efter installationen.",
+                    FontSize = 12.5, Foreground = SoftKeyPopupDesign.SecondaryText,
+                    TextWrapping = TextWrapping.Wrap, LineHeight = 17, Margin = new Thickness(0, 3, 0, 0)
+                }
+            }
         };
         Grid.SetColumn(message, 1);
         grid.Children.Add(message);
 
         return new Border
         {
-            Background = SoftKeyPopupDesign.DialogFooter, CornerRadius = new CornerRadius(8),
-            Padding = new Thickness(12, 8.5, 12, 8.5), Margin = new Thickness(0, 10, 0, 0),
+            Background = SoftKeyPopupDesign.ActionSurface, BorderBrush = SoftKeyPopupDesign.ActionBorder,
+            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(SoftKeyPopupDesign.CardCornerRadius),
+            Padding = new Thickness(12, 10, 12, 10), Margin = new Thickness(0, 10, 0, 0),
             Visibility = Visibility.Collapsed, Child = grid
         };
     }

@@ -54,14 +54,14 @@ partial class KeyboardWindow
         if (!secureMode)
         {
             updateIndicator = CreateUpdateDot();
-            menuHeaders[0].Content = new Grid
-            {
-                Children =
-                {
-                    new TextBlock { Text = "Arkiv", VerticalAlignment = VerticalAlignment.Center },
-                    updateIndicator
-                }
-            };
+            var header = new Grid();
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(13) });
+            header.Children.Add(new TextBlock { Text = "Arkiv", VerticalAlignment = VerticalAlignment.Center });
+            Grid.SetColumn(updateIndicator, 1);
+            header.Children.Add(updateIndicator);
+            menuHeaders[0].Padding = new Thickness(8, 3, 3, 3);
+            menuHeaders[0].Content = header;
             RefreshUpdateIndicator();
         }
         menuHeaders[1] = MenuHeader("Tangentbord", 1);
@@ -103,21 +103,13 @@ partial class KeyboardWindow
         return menuLayer;
     }
 
-    static Border CreateUpdateDot()
+    static Border CreateUpdateDot() => new()
     {
-        var dot = new Border
-        {
-            Width = 8.5, Height = 8.5, CornerRadius = new CornerRadius(4.25),
-            Background = SoftKeyKeyDesign.SlateAccent, BorderThickness = new Thickness(1.5),
-            HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(0, -1, -7, 0), IsHitTestVisible = false, SnapsToDevicePixels = true
-        };
-        dot.SetBinding(System.Windows.Controls.Border.BorderBrushProperty, new System.Windows.Data.Binding("Background")
-        {
-            RelativeSource = new System.Windows.Data.RelativeSource(System.Windows.Data.RelativeSourceMode.FindAncestor, typeof(Button), 1)
-        });
-        return dot;
-    }
+        Width = 10, Height = 10, CornerRadius = new CornerRadius(5),
+        Background = SoftKeyKeyDesign.SlateAccent,
+        HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center,
+        IsHitTestVisible = false, SnapsToDevicePixels = true
+    };
 
     static Border CreateNewMenuBadge() => new()
     {

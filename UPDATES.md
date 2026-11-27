@@ -2,8 +2,8 @@
 
 ## Uppdatera från SoftKey
 
-1. När den installerade skrivbordsappen startar kontrollerar SoftKey versionsinformationen på offentliga GitHub Releases efter cirka två sekunder och därefter var femtonde minut. Om kontrollen misslyckas gör SoftKey ett nytt försök efter två minuter. Om kontrollen behöver vänta på ett aktivt skrivbord startar den kort efter att skrivbordet är tillgängligt igen. Kontrollen använder varken konto eller token.
-2. En diskret blå statuspunkt visas vid **Arkiv** när en nyare version finns (och märkningen **Ny** visas vid **Uppdatering…** inne i menyn). Öppna **Arkiv → Uppdatering…** för att se versionssteg, publiceringsdatum, paketstorlek, signaturstatus och kategoriserade versionsanteckningar. Om ingen version visas kan du välja **Sök efter uppdateringar** i dialogen.
+1. När den installerade skrivbordsappen startar eller skrivbordet blir aktivt igen kontrollerar SoftKey versionsinformationen på offentliga GitHub Releases efter cirka två sekunder. Därefter kontrollerar appen varannan minut, även efter ett tillfälligt fel, och ber GitHub att bekräfta att versionslistan är aktuell. Kontrollen använder varken konto eller token.
+2. En blå statuspunkt visas bredvid **Arkiv** när en nyare version finns. Märkningen **Ny** visas också vid **Uppdatering…** inne i menyn, även om den redan är öppen. Öppna **Arkiv → Uppdatering…** för att se versionssteg, publiceringsdatum, paketstorlek, signaturstatus och kategoriserade versionsanteckningar. Om ingen version visas kan du välja **Sök efter uppdateringar** i dialogen.
 3. Välj **Installera uppdateringen** när du vill fortsätta. Först då börjar hämtningen av ZIP-paketet. Förloppsrutan visar paketnamn och hämtad storlek, följt av signaturkontrollen.
 4. Godkänn installationen när Windows frågar. SoftKey sparar skrivbordsinställningarna och stänger tangentbordet så att programfilerna kan bytas. Förloppsrutan ligger kvar och visar aktuell fil och antal filer. Installationsprogrammet verifierar den nya versionen och öppnar SoftKey igen.
 

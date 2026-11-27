@@ -1,5 +1,7 @@
 using System.Reflection;
 using System.IO;
+using System.Net;
+using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Windows;
@@ -761,24 +763,25 @@ static class StartupChecks
             Check(phoneKey.IsVisible && Math.Abs(phoneKey.ActualHeight - pageDown.ActualHeight) <= 1
                 && Math.Abs(phoneKey.ActualWidth - pageDown.ActualWidth) <= 1,
                 "the rendered phone key is the same size as Page Down within layout rounding");
-            var handset = (System.Windows.Shapes.Path)((Viewbox)phoneKey.Content).Child;
-            Check(handset.Fill == null && handset.Stroke == SoftKeyKeyDesign.SlateAccentText
-                && handset.StrokeLineJoin == PenLineJoin.Round && !handset.IsHitTestVisible,
-                "the phone key has a rounded slate outline and leaves hit testing to the key");
-            Check(HandsetFits(), "the phone outline is centered on the normal-sized key");
+            var card = (System.Windows.Shapes.Path)((Viewbox)phoneKey.Content).Child;
+            Check(card.Fill == null && card.Stroke == SoftKeyKeyDesign.SlateAccentText
+                && card.StrokeLineJoin == PenLineJoin.Round && !card.IsHitTestVisible
+                && AutomationProperties.GetName(phoneKey) == PhoneNumberWindow.ChooseLabel,
+                "the saved-number key uses a slate contact card and keeps its accessible action label");
+            Check(CardFits(), "the phone contact card is centered on the normal-sized key");
             Render(keyboard, Path.Combine(output, "phone-key-shadow.png"));
 
             keyboard.Width = keyboard.MinWidth;
             keyboard.Height = keyboard.MinHeight;
             Pump();
             keyboard.UpdateLayout();
-            Check(phoneKey.IsVisible && HandsetFits(), "the phone outline fits at the keyboard's minimum size");
+            Check(phoneKey.IsVisible && CardFits(), "the phone contact card fits at the keyboard's minimum size");
             Render(keyboard, Path.Combine(output, "phone-key-small.png"));
 
-            bool HandsetFits()
+            bool CardFits()
             {
-                var outline = handset.RenderedGeometry.GetRenderBounds(new Pen(handset.Stroke, handset.StrokeThickness));
-                var ink = handset.TransformToAncestor(phoneKey).TransformBounds(outline);
+                var outline = card.RenderedGeometry.GetRenderBounds(new Pen(card.Stroke, card.StrokeThickness));
+                var ink = card.TransformToAncestor(phoneKey).TransformBounds(outline);
                 var key = new Rect(phoneKey.RenderSize);
                 key.Inflate(-2, -2);
                 return ink.Width >= 8 && key.Contains(ink)
@@ -3668,6 +3671,23 @@ static class StartupChecks
         }
     }
 
+    sealed class ReleaseFeed : HttpMessageHandler
+    {
+        public int Requests { get; private set; }
+        public bool RequestsArePublicAndRevalidated { get; private set; } = true;
+        public string Json { get; set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Requests++;
+            RequestsArePublicAndRevalidated &= request.Method == HttpMethod.Get
+                && request.RequestUri.Host == "api.github.com" && request.RequestUri.AbsolutePath.EndsWith("/releases")
+                && request.Headers.Authorization == null && request.Headers.CacheControl?.NoCache == true;
+            return Task.FromResult(Json == null ? new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+                : new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(Json) });
+        }
+    }
+
     static void UpdateUiChecks(string output)
     {
         string folder = Path.Combine(Path.GetTempPath(), "SoftKey-update-ui-" + Guid.NewGuid().ToString("N"));
@@ -3691,44 +3711,64 @@ static class StartupChecks
                     "no extra menu gap appears between Arkiv and Tangentbord without an update");
                 Render(menu, Path.Combine(output, "update-menu-none.png"));
 
-                var preview = new SoftKeyUpdates.Preview(42, new string('a', 40), "2026-11-27T12:00:00Z",
-                    "• Tydligare tangenttext och smidigare storleksändring.\n• Uppdaterad menyindikator och ny uppdateringsdialog.",
-                    new SoftKeyUpdates.Asset(42, "SoftKey-update-42.zip", "uploaded", 1784688, "sha256:" + new string('a', 64)));
-                var pending = new TaskCompletionSource<SoftKeyUpdates.Preview>();
-                int requests = 0;
+                var feed = new ReleaseFeed();
+                using var client = new HttpClient(feed);
                 var suspended = typeof(KeyboardWindow).GetField("desktopSessionSuspended", Fields);
                 suspended.SetValue(keyboard, true);
-                keyboard.EnableUpdateChecks(_ => ++requests == 1
-                    ? Task.FromException<SoftKeyUpdates.Preview>(new IOException("offline"))
-                    : pending.Task);
+                keyboard.EnableUpdateChecks(cancel => SoftKeyUpdates.CheckAsync(client, 41, cancel));
                 var timer = Field<DispatcherTimer>(keyboard, "updateTimer");
-                Check(!timer.IsEnabled && requests == 0, "a suspended launch defers the initial update check");
+                Check(!timer.IsEnabled && feed.Requests == 0, "a suspended launch defers the initial update check");
                 suspended.SetValue(keyboard, false);
                 Call(keyboard, "ResumeUpdateChecks");
                 Check(timer.IsEnabled && timer.Interval == TimeSpan.FromSeconds(2),
                     "resuming schedules the initial background check");
-                timer.Interval = TimeSpan.FromMilliseconds(1);
-                Pump();
-                Check(requests == 1 && timer.IsEnabled && timer.Interval == TimeSpan.FromMinutes(2),
+                RunScheduledCheck();
+                Check(feed.Requests == 1 && timer.IsEnabled && timer.Interval == TimeSpan.FromMinutes(2),
                     "a failed background check schedules a quick retry");
+                feed.Json = JsonForBuild(41);
+                RunScheduledCheck();
+                Check(feed.Requests == 2 && timer.Interval == TimeSpan.FromMinutes(2) && indicator.Visibility == Visibility.Collapsed,
+                    "an up-to-date keyboard keeps polling the public feed without showing an update");
+
+                feed.Json = JsonForBuild(42);
+                RunScheduledCheck();
+                Check(feed.Requests == 3 && feed.RequestsArePublicAndRevalidated
+                    && Field<SoftKeyUpdateWindow>(keyboard, "updateWindow") == null
+                    && Field<int>(keyboard, "openMenu") == -1 && indicator.IsVisible,
+                    "a release published after startup appears with no menu interaction or package request");
+                var markerBounds = indicator.TransformToAncestor(headers[0]).TransformBounds(new Rect(indicator.RenderSize));
+                Check(indicator.Background == SoftKeyKeyDesign.SlateAccent && markerBounds.Width >= 10
+                    && new Rect(headers[0].RenderSize).Contains(markerBounds)
+                    && Math.Abs(headers[0].ActualWidth - arkivWidthWithoutUpdate) <= 0.5,
+                    "Arkiv displays the full slate marker inside the button without shifting the menu bar");
+                Render(menu, Path.Combine(output, "update-menu-available.png"));
+
+                feed.Json = JsonForBuild(41);
+                RunScheduledCheck();
                 var arkivItems = (StackPanel)Call(keyboard, "BuildMenuPanel", 0);
                 typeof(KeyboardWindow).GetField("openMenu", Fields).SetValue(keyboard, 0);
                 var updateMenuItem = (Button)arkivItems.Children[0];
                 var badge = ((DockPanel)updateMenuItem.Content).Children.OfType<Border>().Single();
                 Check(badge.Visibility == Visibility.Collapsed, "Arkiv initially has no update badge");
-                timer.Interval = TimeSpan.FromMilliseconds(1);
-                Pump();
-                Check(requests == 2 && !timer.IsEnabled, "the retry runs in the background without opening the update dialog");
-                pending.SetResult(preview);
-                Pump();
-                Check(indicator.Visibility == Visibility.Visible && indicator.Background == SoftKeyKeyDesign.SlateAccent
-                    && Math.Abs(headers[0].ActualWidth - arkivWidthWithoutUpdate) <= 0.5,
-                    "Arkiv displays the corner status dot without shifting the menu bar");
-                Check(badge.Visibility == Visibility.Visible && badge.Child is TextBlock { Text: "Ny" }
-                    && timer.IsEnabled && timer.Interval == TimeSpan.FromMinutes(15),
-                    "the existing Arkiv row gains the Ny badge and the regular polling interval resumes");
-                Render(menu, Path.Combine(output, "update-menu-available.png"));
+                feed.Json = JsonForBuild(43);
+                RunScheduledCheck();
+                Check(indicator.IsVisible && badge.Visibility == Visibility.Visible && badge.Child is TextBlock { Text: "Ny" }
+                    && timer.IsEnabled && timer.Interval == TimeSpan.FromMinutes(2),
+                    "the existing Arkiv row gains the Ny badge and background polling continues");
                 Call(keyboard, "CloseMenu");
+
+                void RunScheduledCheck()
+                {
+                    timer.Interval = TimeSpan.FromMilliseconds(1);
+                    Pump();
+                }
+
+                static string JsonForBuild(int build) => $$"""
+                    [{"draft":false,"prerelease":true,"tag_name":"softkey-preview-{{build}}",
+                      "target_commitish":"{{new string('a', 40)}}","published_at":"2026-11-27T12:00:00Z",
+                      "assets":[{"id":{{build}},"name":"SoftKey-update-{{build}}.zip","state":"uploaded",
+                                 "size":1784688,"digest":"sha256:{{new string('a', 64)}}"}]}]
+                    """;
             }
             finally { keyboard.EnablePreviewClose(); keyboard.Close(); }
 
@@ -3807,6 +3847,29 @@ static class StartupChecks
                     && Field<Button>(availableDialog, "check").Visibility == Visibility.Collapsed,
                     "available update state shows structured release notes, verification metadata and reassurance banner");
                 Render(availableDialog, Path.Combine(output, "dialog-update-available.png"));
+
+                var banner = Field<Border>(availableDialog, "reassuranceBanner");
+                var message = Descendants<TextBlock>(banner).ToArray();
+                Check(banner.Background == SoftKeyPopupDesign.ActionSurface && banner.BorderBrush == SoftKeyPopupDesign.ActionBorder
+                    && banner.BorderThickness.Left > 0 && message.Length == 2
+                    && message[0].Foreground == SoftKeyPopupDesign.PrimaryText && message[0].FontSize >= 13
+                    && message[1].Foreground == SoftKeyPopupDesign.SecondaryText && message[1].FontSize >= 12,
+                    "the reassurance banner has an outlined slate surface and two readable levels of text");
+
+                var frame = (StackPanel)((Border)availableDialog.Content).Child;
+                var sections = (StackPanel)((Border)frame.Children[1]).Child;
+                double normalWidth = sections.Width;
+                double normalTextHeight = message[0].ActualHeight;
+                sections.Width = 320;
+                availableDialog.UpdateLayout();
+                Check(message[0].ActualHeight > normalTextHeight && message.All(text =>
+                {
+                    var bounds = text.TransformToAncestor(banner).TransformBounds(new Rect(text.RenderSize));
+                    return new Rect(banner.RenderSize).Contains(bounds);
+                }), "the reassurance text wraps inside the banner in a narrow dialog");
+                Render(availableDialog, Path.Combine(output, "dialog-update-narrow.png"));
+                sections.Width = normalWidth;
+                availableDialog.UpdateLayout();
 
                 var progressView = Field<SoftKeyUpdateProgressView>(availableDialog, "progress");
                 Field<StackPanel>(availableDialog, "summary").Visibility = Visibility.Collapsed;

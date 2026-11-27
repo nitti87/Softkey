@@ -8,8 +8,7 @@ using System.Windows.Threading;
 partial class KeyboardWindow
 {
     static readonly TimeSpan InitialUpdateDelay = TimeSpan.FromSeconds(2);
-    static readonly TimeSpan UpdateRetryDelay = TimeSpan.FromMinutes(2);
-    static readonly TimeSpan UpdateCheckInterval = TimeSpan.FromMinutes(15);
+    static readonly TimeSpan UpdateCheckInterval = TimeSpan.FromMinutes(2);
     readonly CancellationTokenSource updateCancellation = new();
     Func<CancellationToken, Task<SoftKeyUpdates.Preview>> fetchUpdate;
     DispatcherTimer updateTimer;
@@ -44,7 +43,11 @@ partial class KeyboardWindow
 
     void ResumeUpdateChecks()
     {
-        if (updateCheckDeferred) ScheduleUpdateCheck(InitialUpdateDelay);
+        if (updateCheckDeferred || updateTimer?.IsEnabled == true)
+        {
+            updateTimer.Stop();
+            ScheduleUpdateCheck(InitialUpdateDelay);
+        }
     }
 
     async void CheckForUpdateOnTimer(object sender, EventArgs e)
@@ -70,7 +73,6 @@ partial class KeyboardWindow
     async Task<SoftKeyUpdates.Preview> FetchAndDisplayUpdateAsync()
     {
         var cancel = updateCancellation.Token;
-        var next = UpdateRetryDelay;
         try
         {
             var preview = await (fetchUpdate ?? SoftKeyUpdates.CheckAsync)(cancel);
@@ -78,12 +80,11 @@ partial class KeyboardWindow
             availableUpdate = preview;
             RefreshUpdateIndicator();
             updateWindow?.SetAvailable(preview);
-            next = UpdateCheckInterval;
             return preview;
         }
         finally
         {
-            if (!cancel.IsCancellationRequested && updateTimer != null) ScheduleUpdateCheck(next);
+            if (!cancel.IsCancellationRequested && updateTimer != null) ScheduleUpdateCheck(UpdateCheckInterval);
         }
     }
 
