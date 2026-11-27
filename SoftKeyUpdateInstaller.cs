@@ -8,6 +8,7 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Security.Principal;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -151,9 +152,11 @@ static class SoftKeyUpdateInstaller
             _ = Task.Run(() =>
             {
                 bool succeeded = false;
+                string step = "init";
                 try
                 {
-                    ApplyUpdateCore(main, request, Report);
+                    ApplyUpdateCore(main, request, Report, s => step = s);
+                    TryDeleteFile(Path.Combine(main, "update-install-error.json"));
                     succeeded = true;
                     exitCode = 0;
                     Report(100, "Installationen är klar", "Startar om SoftKey.");
@@ -161,9 +164,10 @@ static class SoftKeyUpdateInstaller
                 }
                 catch (Exception ex)
                 {
-                    Trace.TraceWarning("SoftKey update installation failed ({0}).", ex.GetType().Name);
-                    Report(60, "Uppdateringen avbröts", "Kontrollera SoftKey efter omstarten.");
-                    Thread.Sleep(2200);
+                    Trace.TraceWarning("SoftKey update installation failed at {0} ({1}).", step, ex.GetType().Name);
+                    WriteInstallError(main, request.BuildNumber, step, ex);
+                    Report(60, "Uppdateringen kunde inte slutföras", $"Återställde tidigare version ({step}). Startar SoftKey igen.");
+                    Thread.Sleep(3500);
                 }
                 finally
                 {
@@ -183,29 +187,34 @@ static class SoftKeyUpdateInstaller
         return exitCode;
     }
 
-    static void ApplyUpdateCore(string main, InstallRequest request, Action<double, string, string> report)
+    static void ApplyUpdateCore(string main, InstallRequest request, Action<double, string, string> report, Action<string> setStep)
     {
         string programFiles = Path.GetFullPath(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles));
         string logon = Path.Combine(programFiles, "SoftKey-Logon-Test");
         string desktopExe = Path.Combine(main, "SoftKey.exe");
         string installedVersionPath = Path.Combine(main, "installed-update-build.txt");
 
+        setStep("verify-paths");
         AssertNotReparsePoint(programFiles);
         AssertNotReparsePoint(main);
         AssertNotReparsePoint(desktopExe);
         StartupTrust.Verify(desktopExe);
 
+        setStep("verify-protection-before");
         int initialSac = ReadSmartAppControlState();
         AssertWindowsProtection(initialSac);
 
         Process oldDesktop = null;
         try
         {
+            setStep("check-desktop-process");
             oldDesktop = TryOpenDesktopProcess(request.DesktopPid, request.DesktopStartedTicks, desktopExe);
 
+            setStep("read-logon-registration");
             var (logonEnabled, separateLogon) = ReadLogonRegistration(main, logon);
             if (separateLogon) AssertNotReparsePoint(logon);
 
+            setStep("acquire-install-lock");
             using var installLock = new FileStream(Path.Combine(main, ".install.lock"),
                 FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, 4096, FileOptions.DeleteOnClose);
 
@@ -218,6 +227,7 @@ static class SoftKeyUpdateInstaller
 
             try
             {
+                setStep("verify-archive");
                 string packageName = FormattableString.Invariant($"SoftKey-update-{request.BuildNumber}.zip");
                 report(62, "Verifierar uppdateringen", packageName);
 
@@ -249,6 +259,7 @@ static class SoftKeyUpdateInstaller
                 if (manifest.BuildNumber != request.BuildNumber || !string.Equals(manifest.Commit, request.Commit, StringComparison.Ordinal))
                     throw new InvalidOperationException("Det valda uppdateringspaketet har ändrats.");
 
+                setStep("extract-and-verify");
                 report(65, "Förbereder programfilerna", "Kontrollerar SoftKeys signerade programdelar.");
                 var files = new List<StagedFile>();
                 using (var archiveStream = new FileStream(stageArchive, FileMode.Open, FileAccess.Read, FileShare.Read))
@@ -282,21 +293,26 @@ static class SoftKeyUpdateInstaller
                     }
                 }
 
+                setStep("wait-desktop-exit");
                 report(70, "Förbereder installationen", "Väntar på att SoftKey stängs.");
                 if (oldDesktop != null && !oldDesktop.WaitForExit(20000))
                     throw new TimeoutException("Skrivbordstangentbordet hann inte stängas före uppdateringen.");
 
+                setStep("stop-brokers");
                 pausedBrokers.AddRange(StopRunningLoginBrokers(Path.Combine(main, "SoftKey.Startup.exe")));
-                WaitForSoftKeyProcessesToExit(Environment.ProcessId, TimeSpan.FromSeconds(8));
+                setStep("wait-processes");
+                WaitForSoftKeyProcessesToExit(Environment.ProcessId, TimeSpan.FromSeconds(10));
 
                 for (int i = 0; i < files.Count; i++)
                 {
                     var file = files[i];
+                    setStep($"replace-{file.Name}");
                     report(72 + 21.0 * (i + 1) / files.Count, "Installerar programfiler", $"{file.Name}  ·  {i + 1} av {files.Count}");
-                    File.Replace(file.NextPath, file.DestinationPath, file.BackupPath);
+                    ReplaceFileWithRetry(file.NextPath, file.DestinationPath, file.BackupPath);
                     replaced.Add(file);
                 }
 
+                setStep("verify-installed-files");
                 report(94, "Kontrollerar installationen", "Verifierar programfilerna och provar programstarten.");
                 foreach (var file in files)
                 {
@@ -310,21 +326,27 @@ static class SoftKeyUpdateInstaller
                     }
                 }
 
+                setStep("probe-desktop");
                 RunStartupProbe(desktopExe, new[] { "--verify-update-startup", manifest.BuildNumber.ToString(CultureInfo.InvariantCulture) }, expectedExitCode: 0);
                 if (logonEnabled)
                 {
                     string signInRoot = separateLogon ? logon : main;
+                    setStep("probe-logon");
                     RunStartupProbe(Path.Combine(signInRoot, "SoftKey.Logon.exe"), new[] { "--verify-update-boundary" }, expectedExitCode: 2);
+                    setStep("probe-locked");
                     RunStartupProbe(Path.Combine(signInRoot, "SoftKey.Locked.exe"), new[] { "--verify-uiaccess" }, expectedExitCode: 0);
                 }
 
+                setStep("verify-protection-after");
                 AssertWindowsProtection(initialSac);
+                setStep("restart-brokers");
                 RestartLoginBrokers(pausedBrokers);
                 pausedBrokers.Clear();
 
+                setStep("write-installed-build");
                 string nextVersion = Path.Combine(stage, "build-number");
                 File.WriteAllText(nextVersion, manifest.BuildNumber.ToString(CultureInfo.InvariantCulture));
-                if (File.Exists(installedVersionPath)) File.Replace(nextVersion, installedVersionPath, Path.Combine(stage, "previous-build"));
+                if (File.Exists(installedVersionPath)) ReplaceFileWithRetry(nextVersion, installedVersionPath, Path.Combine(stage, "previous-build"));
                 else File.Move(nextVersion, installedVersionPath);
                 completed = true;
             }
@@ -335,7 +357,7 @@ static class SoftKeyUpdateInstaller
                 for (int i = replaced.Count - 1; i >= 0; i--)
                 {
                     var file = replaced[i];
-                    try { File.Replace(file.BackupPath, file.DestinationPath, null); }
+                    try { ReplaceFileWithRetry(file.BackupPath, file.DestinationPath, null); }
                     catch { retainRecovery = true; }
                 }
                 throw;
@@ -408,31 +430,42 @@ static class SoftKeyUpdateInstaller
         if (currentSac != expectedSac)
             throw new InvalidOperationException("Smart App Control-läget ändrades under uppdateringen.");
 
-        object locator = null, service = null, results = null;
-        try
+        Exception last = null;
+        for (int attempt = 0; attempt < 2; attempt++)
         {
-            locator = Activator.CreateInstance(Type.GetTypeFromProgID("WbemScripting.SWbemLocator", true));
-            service = ((dynamic)locator).ConnectServer(".", @"root\Microsoft\Windows\Defender");
-            results = ((dynamic)service).ExecQuery("SELECT AntivirusEnabled, RealTimeProtectionEnabled FROM MSFT_MpComputerStatus");
-            bool verified = false;
-            foreach (var item in (System.Collections.IEnumerable)results)
+            object locator = null, service = null, results = null;
+            try
             {
-                try
+                locator = Activator.CreateInstance(Type.GetTypeFromProgID("WbemScripting.SWbemLocator", true));
+                service = ((dynamic)locator).ConnectServer(".", @"root\Microsoft\Windows\Defender");
+                results = ((dynamic)service).ExecQuery("SELECT AntivirusEnabled, RealTimeProtectionEnabled FROM MSFT_MpComputerStatus");
+                bool verified = false;
+                foreach (var item in (System.Collections.IEnumerable)results)
                 {
-                    bool av = Convert.ToBoolean(((dynamic)item).Properties_.Item("AntivirusEnabled").Value, CultureInfo.InvariantCulture);
-                    bool rtp = Convert.ToBoolean(((dynamic)item).Properties_.Item("RealTimeProtectionEnabled").Value, CultureInfo.InvariantCulture);
-                    if (!av || !rtp) throw new InvalidOperationException("Microsoft Defender antivirus eller realtidsskydd är inte aktivt.");
-                    verified = true;
+                    try
+                    {
+                        bool av = Convert.ToBoolean(((dynamic)item).Properties_.Item("AntivirusEnabled").Value, CultureInfo.InvariantCulture);
+                        bool rtp = Convert.ToBoolean(((dynamic)item).Properties_.Item("RealTimeProtectionEnabled").Value, CultureInfo.InvariantCulture);
+                        if (!av || !rtp) throw new InvalidOperationException("Microsoft Defender antivirus eller realtidsskydd är inte aktivt.");
+                        verified = true;
+                    }
+                    finally { if (Marshal.IsComObject(item)) Marshal.FinalReleaseComObject(item); }
                 }
-                finally { if (Marshal.IsComObject(item)) Marshal.FinalReleaseComObject(item); }
+                if (!verified) throw new InvalidOperationException("Windows-skyddet kunde inte verifieras.");
+                return;
             }
-            if (!verified) throw new InvalidOperationException("Windows-skyddet kunde inte verifieras.");
+            catch (COMException ex) when (attempt == 0)
+            {
+                last = ex;
+                Thread.Sleep(300);
+            }
+            finally
+            {
+                foreach (var com in new[] { results, service, locator })
+                    if (com != null && Marshal.IsComObject(com)) Marshal.FinalReleaseComObject(com);
+            }
         }
-        finally
-        {
-            foreach (var com in new[] { results, service, locator })
-                if (com != null && Marshal.IsComObject(com)) Marshal.FinalReleaseComObject(com);
-        }
+        throw last ?? new InvalidOperationException("Windows-skyddet kunde inte verifieras.");
     }
 
     static Process TryOpenDesktopProcess(int pid, long startedTicks, string expectedExe)
@@ -526,6 +559,9 @@ static class SoftKeyUpdateInstaller
                     if (stopped.Count > 0)
                         throw new InvalidOperationException("Fler än en inloggningsbroker körs samtidigt.");
                     ((dynamic)task).Stop(0);
+                    var stopWait = Stopwatch.StartNew();
+                    while ((int)((dynamic)task).State == 4 && stopWait.Elapsed < TimeSpan.FromSeconds(5))
+                        Thread.Sleep(100);
                     stopped.Add(name);
                 }
                 finally { if (Marshal.IsComObject(task)) Marshal.FinalReleaseComObject(task); }
@@ -580,8 +616,17 @@ static class SoftKeyUpdateInstaller
             {
                 foreach (var process in Process.GetProcessesByName(name))
                 {
-                    try { if (process.Id != selfPid && !process.HasExited) any = true; }
-                    catch { }
+                    try
+                    {
+                        if (process.Id != selfPid && !process.HasExited) any = true;
+                    }
+                    catch (System.ComponentModel.Win32Exception)
+                    {
+                        // A running protected/UIAccess/SYSTEM SoftKey process may reject HasExited queries.
+                        any = true;
+                    }
+                    catch (InvalidOperationException) { }
+                    catch (ArgumentException) { }
                     finally { process.Dispose(); }
                 }
             }
@@ -592,16 +637,33 @@ static class SoftKeyUpdateInstaller
         }
     }
 
+    internal static void ReplaceFileWithRetry(string sourcePath, string destinationPath, string backupPath)
+    {
+        const int maxAttempts = 15;
+        for (int attempt = 0; ; attempt++)
+        {
+            try
+            {
+                File.Replace(sourcePath, destinationPath, backupPath);
+                return;
+            }
+            catch (Exception ex) when (attempt + 1 < maxAttempts && (ex is IOException or UnauthorizedAccessException))
+            {
+                Thread.Sleep(Math.Min(250, 75 + attempt * 25));
+            }
+        }
+    }
+
     static void RunStartupProbe(string executable, string[] arguments, int expectedExitCode)
     {
+        // UseShellExecute = true uses ShellExecuteEx so Windows AppInfo grants uiAccess="true" tokens.
         var start = new ProcessStartInfo(executable)
         {
-            UseShellExecute = false,
-            CreateNoWindow = true,
+            UseShellExecute = true,
             WindowStyle = ProcessWindowStyle.Hidden,
-            WorkingDirectory = Path.GetDirectoryName(executable)
+            WorkingDirectory = Path.GetDirectoryName(executable),
+            Arguments = string.Join(" ", arguments)
         };
-        foreach (string arg in arguments) start.ArgumentList.Add(arg);
         using var process = Process.Start(start) ?? throw new InvalidOperationException("Kunde inte starta kontrollprocessen.");
         if (!process.WaitForExit(12000))
         {
@@ -609,7 +671,33 @@ static class SoftKeyUpdateInstaller
             throw new TimeoutException("Startkontrollen för den nya versionen avslutades inte i tid.");
         }
         if (process.ExitCode != expectedExitCode)
-            throw new InvalidOperationException($"Startkontrollen misslyckades för {Path.GetFileName(executable)}.");
+            throw new InvalidOperationException($"Startkontrollen misslyckades för {Path.GetFileName(executable)} (kod {process.ExitCode}, förväntade {expectedExitCode}).");
+    }
+
+    static void WriteInstallError(string main, long buildNumber, string step, Exception ex)
+    {
+        try
+        {
+            // Installer-only diagnostics: contains no typed text, personal words or credentials.
+            string path = Path.Combine(main, "update-install-error.json");
+            string json = JsonSerializer.Serialize(new
+            {
+                TimeUtc = DateTime.UtcNow.ToString("o"),
+                BuildNumber = buildNumber,
+                Step = step,
+                Type = ex.GetType().Name,
+                HResult = ex.HResult,
+                Message = ex.Message
+            });
+            File.WriteAllText(path, json);
+        }
+        catch { }
+    }
+
+    static void TryDeleteFile(string path)
+    {
+        try { if (File.Exists(path)) File.Delete(path); }
+        catch { }
     }
 
     static string ComputeFileSha256(string path)

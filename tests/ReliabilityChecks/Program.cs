@@ -452,6 +452,19 @@ static class Program
             catch (TargetInvocationException) { rejectedBad = true; }
             Check(rejectedBad, "native archive verifier rejects invalid or unsigned archives");
 
+            var installerType = assembly.GetType("SoftKeyUpdateInstaller", true);
+            var replaceWithRetry = installerType.GetMethod("ReplaceFileWithRetry", BindingFlags.Static | BindingFlags.NonPublic);
+            string dstFile = Path.Combine(folder, "replace-target.bin");
+            string srcFile = Path.Combine(folder, "replace-next.bin");
+            string bakFile = Path.Combine(folder, "replace-target.bak");
+            File.WriteAllText(dstFile, "old");
+            File.WriteAllText(srcFile, "new");
+            var lockStream = new FileStream(dstFile, FileMode.Open, FileAccess.Read, FileShare.None);
+            _ = System.Threading.Tasks.Task.Run(() => { Thread.Sleep(180); lockStream.Dispose(); });
+            replaceWithRetry.Invoke(null, new object[] { srcFile, dstFile, bakFile });
+            Check(File.ReadAllText(dstFile) == "new" && File.ReadAllText(bakFile) == "old",
+                "update installer retries file replacement cleanly across transient file locks");
+
             string realArchive = Path.Combine(Path.GetDirectoryName(assemblyPath), "..", "..", "..", "..", "Updates", "SoftKey-update-6.zip");
             if (File.Exists(realArchive))
             {
