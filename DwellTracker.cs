@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 enum DwellTarget { None, AutoClick, RightClick, DoubleClick, Drag, DragDrop, MoveKeyboard, MoveDragKey, UndockDragKey, ResizeLeft, ResizeRight, ResizeTop, ResizeBottom, ResizeTopLeft, ResizeTopRight, ResizeBottomLeft, ResizeBottomRight, SoftKeyControl, SoftKeyRepeat, External, ToggleKeyboard, ToggleKeyboardHeader, MiddleDrag, RightDrag, CloseSoftKey, MoveKeyboardEdge }
 
@@ -9,11 +10,16 @@ sealed class DwellTracker
     const int SameTargetRearmDistancePx = 12;
     const int RearmDelayMs = 120;
     const int MaxRearmSampleGapMs = 200;
+    const int RecentTravelWindowMs = 200;
+    const int RecentTravelTolerancePx = 6;
     int anchorX, anchorY;
     double since;
     DwellTarget target;
     object control;
     (int X, int Y) lastPoint;
+    (int X, int Y)? lastMotionPoint;
+    readonly Queue<(int X, int Y, double Time)> recentMotion = new();
+    AxisTravel horizontalTravel, verticalTravel;
     (int X, int Y)? clickPoint;
     DwellTarget clickedTarget;
     object clickedControl;
@@ -39,9 +45,64 @@ sealed class DwellTracker
     // Sample movement even when control identification is still running on a worker.
     public bool ObserveMovement(int x, int y, int jitterPx, double now)
     {
+        bool moving = ObserveTravel(x, y, now);
         if (clickPoint is { } origin) ObserveClickDeparture(x, y, origin, jitterPx, now);
-        if (initialized && MovedBeyond(x, y, anchorX, anchorY, jitterPx)) Reset();
+        // The aiming area can be wide; a click still needs a stationary visit within it.
+        if (initialized && (moving || MovedBeyond(x, y, anchorX, anchorY, jitterPx))) Reset();
         return repeating || !clickPoint.HasValue || outsideClickAreaSince.HasValue;
+    }
+
+    bool ObserveTravel(int x, int y, double now)
+    {
+        var previous = lastMotionPoint;
+        lastMotionPoint = (x, y);
+        if (previous is not { } point)
+        {
+            recentMotion.Enqueue((x, y, now));
+            return false;
+        }
+        if (point.X == x && point.Y == y) return false;
+
+        while (recentMotion.TryPeek(out var oldest) && now - oldest.Time > RecentTravelWindowMs) recentMotion.Dequeue();
+        bool travelled = MovedBeyond(x, y, point.X, point.Y, RecentTravelTolerancePx);
+        foreach (var sample in recentMotion)
+        {
+            if (!MovedBeyond(x, y, sample.X, sample.Y, RecentTravelTolerancePx)) continue;
+            travelled = true;
+            break;
+        }
+        recentMotion.Enqueue((x, y, now));
+
+        // Slow movement in one direction can be meaningful before it leaves the recent movement area.
+        bool horizontal = horizontalTravel.Observe((long)x - point.X, now);
+        bool vertical = verticalTravel.Observe((long)y - point.Y, now);
+        return travelled || horizontal || vertical;
+    }
+
+    struct AxisTravel
+    {
+        const int MinSamples = 3;
+        const int MinDistancePx = 4;
+        const int MaxMotionGapMs = 180;
+        int direction, samples;
+        long distance;
+        double lastMove;
+
+        public bool Observe(long delta, double now)
+        {
+            if (delta == 0) return false;
+            int nextDirection = Math.Sign(delta);
+            if (direction != nextDirection || now - lastMove > MaxMotionGapMs)
+            {
+                direction = nextDirection;
+                samples = 0;
+                distance = 0;
+            }
+            lastMove = now;
+            samples = Math.Min(samples + 1, MinSamples);
+            distance = Math.Min(distance + Math.Abs(delta), MinDistancePx);
+            return samples >= MinSamples && distance >= MinDistancePx;
+        }
     }
 
     void ObserveClickDeparture(int x, int y, (int X, int Y) origin, int jitterPx, double now)

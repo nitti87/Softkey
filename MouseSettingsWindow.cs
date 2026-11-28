@@ -110,7 +110,7 @@ class MouseSettingsWindow : Window
         }
         var timing = new StackPanel();
         timing.Children.Add(Row("Tid före klick", dwell, "ms  (200–5000)", dwellError, dwellSignInHelp));
-        const string toleranceHelp = "Hur långt pekaren får röra sig under väntetiden.";
+        const string toleranceHelp = "Största avståndet från där väntetiden började. Tydlig rörelse startar om väntetiden även inom området.";
         timing.Children.Add(Row("Rörelsetolerans", jitter, "px  (2–100)", jitterError, jitterSignInHelp, toleranceHelp));
         var timingAndPreview = new Grid();
         timingAndPreview.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });

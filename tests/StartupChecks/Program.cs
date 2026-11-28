@@ -242,6 +242,7 @@ static class StartupChecks
 
     static void DwellClickState()
     {
+        DwellMovementState();
         var tracker = new DwellTracker();
         bool Tick(int x, double now, DwellTarget target, string control = null, bool repeat = false)
             => tracker.Update(x, 20, target, now, 800, 10, repeat, control);
@@ -338,6 +339,44 @@ static class StartupChecks
                 if (!tracker.ObserveMovement(x, 20, tolerance, now)) return false;
             return true;
         }
+    }
+
+    static void DwellMovementState()
+    {
+        var tracker = new DwellTracker();
+        bool Sample(int x, int y, double time) => tracker.Update(x, y, DwellTarget.External, time, 750, 100, false, "wide target");
+
+        bool clicked = false;
+        for (int now = 0; now <= 800; now += 40) clicked |= Sample(now / 10, 0, now);
+        Check(!clicked, "a large aiming tolerance cannot trigger a click during continuous travel across one control");
+        Check(!Sample(80, 0, 1549) && Sample(80, 0, 1550), "an uninterrupted dwell starts as the pointer comes to rest");
+
+        tracker = new DwellTracker();
+        clicked = false;
+        for (int now = 0; now <= 2400; now += 40) clicked |= Sample(0, now / 120, now);
+        Check(!clicked, "slow directional motion does not count as a dwell even when individual changes are only one pixel");
+
+        tracker = new DwellTracker();
+        clicked = false;
+        int[] sweep = [0, 4, 8, 4];
+        for (int now = 0; now <= 1600; now += 40) clicked |= Sample(sweep[now / 40 % sweep.Length], 0, now);
+        Check(!clicked, "steering back and forth across a wide target keeps restarting the dwell");
+
+        tracker = new DwellTracker();
+        Check(!Sample(0, 0, 0) && !Sample(0, 0, 710) && !Sample(15, 0, 750)
+            && !Sample(15, 0, 1499) && Sample(15, 0, 1500),
+            "new movement just before the click discards the elapsed dwell even inside the aiming tolerance");
+
+        tracker.Complete(1500, allowRepeat: false);
+        clicked = false;
+        for (int now = 1540; now <= 2300; now += 40)
+            clicked |= tracker.Update(15 + (now - 1500) / 10, 0, DwellTarget.External, now, 750, 100, false, "next wide target");
+        Check(!clicked, "moving over the next control after a click cannot complete another dwell");
+
+        tracker = new DwellTracker();
+        int[] tremor = [0, 2, -1, 1, -2];
+        for (int now = 0; now < 750; now += 40) Sample(tremor[now / 40 % tremor.Length], 0, now);
+        Check(Sample(1, 0, 750), "small reversible pointer movement still allows a click without extending the selected time");
     }
 
     static void ResponsiveWordFeedback()
