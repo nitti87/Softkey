@@ -3850,7 +3850,7 @@ static class StartupChecks
 
                 var banner = Field<Border>(availableDialog, "reassuranceBanner");
                 var message = Descendants<TextBlock>(banner).ToArray();
-                Check(banner.Background == SoftKeyPopupDesign.ActionSurface && banner.BorderBrush == SoftKeyPopupDesign.ActionBorder
+                Check(banner.Background == SoftKeyKeyDesign.ModifierFace && banner.BorderBrush == SoftKeyPopupDesign.CardBorder
                     && banner.BorderThickness.Left > 0 && message.Length == 2
                     && message[0].Foreground == SoftKeyPopupDesign.PrimaryText && message[0].FontSize >= 13
                     && message[1].Foreground == SoftKeyPopupDesign.SecondaryText && message[1].FontSize >= 12,

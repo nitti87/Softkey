@@ -6,7 +6,37 @@ using System.Windows.Media;
 // Shared button appearance and placement for SoftKey popup windows.
 static class SoftKeyButtonDesign
 {
+    static readonly Brush DestructiveFace = FrozenBrush(0x9F, 0x30, 0x24);
+    static readonly Brush DestructiveHover = FrozenBrush(0x88, 0x28, 0x1D);
+    static readonly Brush DestructivePressed = FrozenBrush(0x72, 0x20, 0x17);
+    static readonly Brush DestructiveBorder = FrozenBrush(0x82, 0x25, 0x1B);
     static readonly Style ActionFocusStyle = CreateFocusStyle();
+
+    static Brush FrozenBrush(byte r, byte g, byte b)
+    {
+        var brush = new SolidColorBrush(Color.FromRgb(r, g, b));
+        brush.Freeze();
+        return brush;
+    }
+
+    public static Button Destructive(string text)
+    {
+        var button = new Button
+        {
+            Content = text, Width = 90, Height = 30, FontSize = 12, FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(6, 0, 0, 0), Padding = new Thickness(6, 3, 6, 3),
+            Background = DestructiveFace, Foreground = SoftKeyPopupDesign.OnAccentText,
+            BorderBrush = DestructiveBorder, BorderThickness = new Thickness(1),
+            FocusVisualStyle = ActionFocusStyle, Template = ButtonTemplate(8, HorizontalAlignment.Center)
+        };
+        void ChangeHover(bool hovered) => SoftKeyHoverTransition.Apply(button, Control.BackgroundProperty,
+            hovered ? DestructiveHover : DestructiveFace);
+        button.MouseEnter += (_, _) => ChangeHover(true);
+        button.PreviewMouseLeftButtonDown += (_, _) => button.Background = DestructivePressed;
+        button.PreviewMouseLeftButtonUp += (_, _) => ChangeHover(button.IsMouseOver);
+        button.MouseLeave += (_, _) => ChangeHover(false);
+        return button;
+    }
 
     public static Button Apply(bool primary = false)
     {

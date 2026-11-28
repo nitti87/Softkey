@@ -236,14 +236,14 @@ sealed class KeyboardSettingsWindow : Window
         content.Children.Add(new TextBlock
         {
             Text = "Förhandsvisning", FontSize = 13, FontWeight = FontWeights.SemiBold,
-            Foreground = SoftKeyPopupDesign.ActionText, Margin = new Thickness(1, 0, 0, 9)
+            Foreground = SoftKeyPopupDesign.PrimaryText, Margin = new Thickness(1, 0, 0, 9)
         });
         content.Children.Add(new Viewbox { StretchDirection = StretchDirection.DownOnly, Child = sample, IsEnabled = false });
         return new Border
         {
-            Background = SoftKeyKeyDesign.WindowSurface, BorderBrush = SoftKeyKeyDesign.Outline,
-            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(9),
-            Margin = new Thickness(0, 0, 0, 12), Padding = new Thickness(12, 10, 12, 12),
+            Background = SoftKeyPopupDesign.CardSurface, BorderBrush = SoftKeyPopupDesign.CardBorder,
+            BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(SoftKeyPopupDesign.CardCornerRadius),
+            Margin = new Thickness(0, 0, 0, 10), Padding = new Thickness(12, 10, 12, 12),
             Child = content, IsHitTestVisible = false
         };
 
@@ -288,12 +288,13 @@ sealed class KeyboardSettingsWindow : Window
         slider.Resources["SliderThumbPressed"] = SoftKeyPopupDesign.ActionHover;
         AutomationProperties.SetName(slider, label);
 
-        var amount = new TextBlock { FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = SoftKeyPopupDesign.ActionText };
-        var header = new DockPanel { Margin = new Thickness(0, 0, 0, 5) };
+        var amount = new TextBlock { FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = SoftKeyPopupDesign.PrimaryText };
+        var header = new DockPanel { Margin = new Thickness(0, 0, 0, 6) };
         var badge = new Border
         {
-            MinWidth = 52, CornerRadius = new CornerRadius(5), Padding = new Thickness(7, 3, 7, 3),
-            Background = SoftKeyPopupDesign.ActionSurface, Child = amount
+            MinWidth = 52, CornerRadius = new CornerRadius(8), Padding = new Thickness(8, 2, 8, 2),
+            Background = SoftKeyPopupDesign.DialogFooter, BorderBrush = SoftKeyPopupDesign.CardBorder,
+            BorderThickness = new Thickness(1), Child = amount
         };
         amount.TextAlignment = TextAlignment.Center;
         DockPanel.SetDock(badge, Dock.Right);

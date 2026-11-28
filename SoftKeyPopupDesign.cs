@@ -233,4 +233,41 @@ static class SoftKeyPopupDesign
         };
     }
 
+    public static Border PromptCard(Brush tileBackground, Brush iconStroke, string iconOutline,
+        UIElement heading, string detail = null)
+    {
+        var iconCanvas = new Canvas
+        {
+            Width = 20, Height = 20,
+            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center
+        };
+        iconCanvas.Children.Add(new System.Windows.Shapes.Path
+        {
+            Data = Geometry.Parse(iconOutline), Stroke = iconStroke, StrokeThickness = 1.6,
+            StrokeLineJoin = PenLineJoin.Round, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round
+        });
+        var tile = new Border
+        {
+            Width = 40, Height = 40, CornerRadius = new CornerRadius(9),
+            Background = tileBackground, Margin = new Thickness(0, 1, 13, 0),
+            VerticalAlignment = VerticalAlignment.Top, IsHitTestVisible = false, Child = iconCanvas
+        };
+        DockPanel.SetDock(tile, Dock.Left);
+
+        var text = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        text.Children.Add(heading);
+        if (!string.IsNullOrWhiteSpace(detail))
+            text.Children.Add(new TextBlock
+            {
+                Text = detail, FontSize = 12, Foreground = SecondaryText,
+                TextWrapping = TextWrapping.Wrap, LineHeight = 17, Margin = new Thickness(0, 4, 0, 0)
+            });
+
+        return new Border
+        {
+            Background = CardSurface, BorderBrush = CardBorder, BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(CardCornerRadius), Padding = new Thickness(14, 13, 14, 13),
+            Child = new DockPanel { Children = { tile, text } }
+        };
+    }
 }

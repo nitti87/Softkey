@@ -76,16 +76,33 @@ partial class KeyboardWindow
         }
         suggestionViewport = new ScrollViewer
         {
-            Content = suggestionList, Margin = new Thickness(0, 2, 6, 2), Visibility = Visibility.Collapsed,
+            Content = suggestionList, Margin = new Thickness(3, 3, 9, 3), Visibility = Visibility.Collapsed,
             HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Focusable = false
         };
         var suggestionArea = new Grid();
+        if (!secureMode)
+        {
+            var suggestionTrayBrush = new SolidColorBrush(Color.FromRgb(0xE2, 0xDF, 0xD7));
+            suggestionTrayBrush.Freeze();
+            suggestionArea.Children.Add(new Border
+            {
+                Background = suggestionTrayBrush,
+                BorderBrush = SoftKeyKeyDesign.MutedDivider,
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(10),
+                Margin = new Thickness(0, 0, 6, 0),
+                IsHitTestVisible = false,
+                SnapsToDevicePixels = true
+            });
+        }
         suggestionArea.Children.Add(suggestionViewport);
+        var emptyStrokeBrush = new SolidColorBrush(Color.FromRgb(0x3D, 0x3A, 0x35));
+        emptyStrokeBrush.Freeze();
         var emptySuggestionsDrawing = new GeometryDrawing
         {
-            Geometry = Geometry.Parse("M 6,4 H 18 A 3,3 0 0 1 21,7 V 14 A 3,3 0 0 1 18,17 H 10 L 5,21 V 16.8 A 3,3 0 0 1 3,14 V 7 A 3,3 0 0 1 6,4 Z M 9,10.5 H 15"),
-            Pen = new Pen(new SolidColorBrush(Color.FromRgb(0x7A, 0x76, 0x6E)), 1.4)
+            Geometry = Geometry.Parse("M 6.2,3.5 V 7.5 M 4.2,5.5 H 8.2 M 11,5.5 H 19 M 5,11 H 19 M 5,16.5 H 15.5"),
+            Pen = new Pen(emptyStrokeBrush, 1.55)
             {
                 StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round, LineJoin = PenLineJoin.Round
             }
@@ -94,22 +111,56 @@ partial class KeyboardWindow
         emptySuggestionsSource.Freeze();
         emptySuggestionsIcon = new Image
         {
-            Source = emptySuggestionsSource, Width = 26, Height = 26,
+            Source = emptySuggestionsSource, Width = 18, Height = 18,
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-            Margin = suggestionViewport.Margin, IsHitTestVisible = false
+            IsHitTestVisible = false
         };
         System.Windows.Automation.AutomationProperties.SetName(emptySuggestionsIcon, "Inga ordförslag");
-        suggestionArea.Children.Add(emptySuggestionsIcon);
-        var emptySuggestionsSeparator = new Border
+
+        var slotBarBrush = new SolidColorBrush(Color.FromRgb(0xD3, 0xCF, 0xC5));
+        slotBarBrush.Freeze();
+        Border PlaceholderBar(double widthFraction, double bottomMargin) => new()
         {
-            Width = 1, Background = SoftKeyKeyDesign.MutedDivider, Opacity = 0.65,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            Margin = new Thickness(0, 8, 3, 8), IsHitTestVisible = false,
-            SnapsToDevicePixels = true
+            Height = 4, Width = widthFraction, CornerRadius = new CornerRadius(2),
+            Background = slotBarBrush, HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 0, 0, bottomMargin), IsHitTestVisible = false
         };
-        emptySuggestionsSeparator.SetBinding(VisibilityProperty,
+        var placeholderSlots = new StackPanel
+        {
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(10, 14, 16, 0),
+            IsHitTestVisible = false,
+            Children = { PlaceholderBar(46, 7), PlaceholderBar(38, 7), PlaceholderBar(42, 0) }
+        };
+        var emptyBadgeSurface = new SolidColorBrush(Color.FromRgb(0xF6, 0xF4, 0xEF));
+        emptyBadgeSurface.Freeze();
+        var emptyIconBadge = new Border
+        {
+            Width = 36, Height = 36, CornerRadius = new CornerRadius(8),
+            Background = emptyBadgeSurface, BorderBrush = SoftKeyKeyDesign.MutedDivider,
+            BorderThickness = new Thickness(1), HorizontalAlignment = HorizontalAlignment.Center,
+            Child = emptySuggestionsIcon, IsHitTestVisible = false
+        };
+        var emptySuggestionsLabel = new TextBlock
+        {
+            Text = "Ordförslag", FontSize = 10.5, FontWeight = FontWeights.Medium,
+            Foreground = SoftKeyPopupDesign.SecondaryText, TextAlignment = TextAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 6, 0, 0),
+            IsHitTestVisible = false
+        };
+        var emptyCenterStack = new StackPanel
+        {
+            VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(2, 16, 8, 4), IsHitTestVisible = false,
+            Children = { emptyIconBadge, emptySuggestionsLabel }
+        };
+        var emptyStateOverlay = new Grid { IsHitTestVisible = false };
+        emptyStateOverlay.SetBinding(VisibilityProperty,
             new System.Windows.Data.Binding(nameof(UIElement.Visibility)) { Source = emptySuggestionsIcon });
-        suggestionArea.Children.Add(emptySuggestionsSeparator);
+        emptyStateOverlay.Children.Add(placeholderSlots);
+        emptyStateOverlay.Children.Add(emptyCenterStack);
+        suggestionArea.Children.Add(emptyStateOverlay);
+
         if (!secureMode)
         {
             var caption = new TextBlock
@@ -137,8 +188,15 @@ partial class KeyboardWindow
         }
         suggestionArea.SizeChanged += (_, e) =>
         {
-            double iconSize = Math.Clamp(Math.Min(e.NewSize.Width, e.NewSize.Height) * 0.3, 18, 30);
-            emptySuggestionsIcon.Width = emptySuggestionsIcon.Height = iconSize;
+            double usableWidth = Math.Max(0, e.NewSize.Width - 6);
+            double badgeSize = Math.Clamp(Math.Min(usableWidth * 0.52, e.NewSize.Height * 0.24), 24, 38);
+            emptyIconBadge.Width = emptyIconBadge.Height = badgeSize;
+            emptySuggestionsIcon.Width = emptySuggestionsIcon.Height = Math.Clamp(badgeSize * 0.5, 13, 19);
+            bool showLabel = usableWidth >= 56 && e.NewSize.Height >= 115;
+            emptySuggestionsLabel.Visibility = showLabel ? Visibility.Visible : Visibility.Collapsed;
+            bool showSlots = usableWidth >= 56 && e.NewSize.Height >= 185;
+            placeholderSlots.Visibility = showSlots ? Visibility.Visible : Visibility.Collapsed;
+            emptyCenterStack.Margin = new Thickness(2, showSlots ? 18 : 2, 8, 2);
             double inset = suggestionViewport.Margin.Top + suggestionViewport.Margin.Bottom;
             double rowHeight = Math.Max(0, (e.NewSize.Height - inset) / sugg.Length);
             foreach (var button in sugg)

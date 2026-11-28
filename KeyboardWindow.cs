@@ -506,6 +506,21 @@ partial class KeyboardWindow : Window
     UIElement StatusRow()
     {
         var row = new Grid();
+        int nextColumn = 0;
+        if (!secureMode)
+        {
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var statusDotBrush = new SolidColorBrush(Color.FromRgb(0x6C, 0x82, 0x6A));
+            statusDotBrush.Freeze();
+            var statusDot = new System.Windows.Shapes.Ellipse
+            {
+                Width = 6, Height = 6, Fill = statusDotBrush,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 6, 0), IsHitTestVisible = false
+            };
+            Grid.SetColumn(statusDot, nextColumn++);
+            row.Children.Add(statusDot);
+        }
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         statusText = new TextBlock
         {
@@ -519,6 +534,7 @@ partial class KeyboardWindow : Window
             Margin = new Thickness(0, 0, 8, 0)
         };
         TextOptions.SetTextFormattingMode(statusText, TextFormattingMode.Display);
+        Grid.SetColumn(statusText, nextColumn++);
         row.Children.Add(statusText);
         if (!secureMode)
         {
@@ -530,7 +546,7 @@ partial class KeyboardWindow : Window
                 Margin = new Thickness(0, 0, 8, 0), Visibility = Visibility.Collapsed, IsHitTestVisible = false
             };
             AutomationProperties.SetLiveSetting(dragKeyStatus, AutomationLiveSetting.Polite);
-            Grid.SetColumn(dragKeyStatus, 1);
+            Grid.SetColumn(dragKeyStatus, nextColumn++);
             row.Children.Add(dragKeyStatus);
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             modifierStatus = new TextBlock
@@ -538,7 +554,7 @@ partial class KeyboardWindow : Window
                 Foreground = SoftKeyKeyDesign.SlateAccent, FontSize = StatusFontSize,
                 FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center
             };
-            Grid.SetColumn(modifierStatus, 2);
+            Grid.SetColumn(modifierStatus, nextColumn);
             row.Children.Add(modifierStatus);
         }
         return new Border

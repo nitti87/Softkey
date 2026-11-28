@@ -300,7 +300,7 @@ sealed class SoftKeyUpdateWindow : Window
 
         return new Border
         {
-            Background = SoftKeyPopupDesign.ActionSurface, BorderBrush = SoftKeyPopupDesign.ActionBorder,
+            Background = SoftKeyKeyDesign.ModifierFace, BorderBrush = SoftKeyPopupDesign.CardBorder,
             BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(SoftKeyPopupDesign.CardCornerRadius),
             Padding = new Thickness(12, 10, 12, 10), Margin = new Thickness(0, 10, 0, 0),
             Visibility = Visibility.Collapsed, Child = grid

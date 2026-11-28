@@ -213,21 +213,32 @@ sealed class SavedSuggestionsPage : UserControl
     Border EntryList()
     {
         var row = new FrameworkElementFactory(typeof(DockPanel));
+        var iconTile = new FrameworkElementFactory(typeof(Border));
+        iconTile.SetValue(DockPanel.DockProperty, Dock.Left);
+        iconTile.SetValue(WidthProperty, 36.0);
+        iconTile.SetValue(HeightProperty, 36.0);
+        iconTile.SetValue(Border.CornerRadiusProperty, new CornerRadius(8));
+        iconTile.SetValue(Border.BackgroundProperty, SoftKeyPopupDesign.ActionSurface);
+        iconTile.SetValue(VerticalAlignmentProperty, VerticalAlignment.Center);
+        iconTile.SetValue(MarginProperty, new Thickness(0, 0, 12, 0));
+        iconTile.SetValue(IsHitTestVisibleProperty, false);
+
         var icon = new FrameworkElementFactory(typeof(Path));
-        icon.SetValue(DockPanel.DockProperty, Dock.Left);
         icon.SetValue(WidthProperty, 18.0);
         icon.SetValue(HeightProperty, 18.0);
+        icon.SetValue(HorizontalAlignmentProperty, HorizontalAlignment.Center);
         icon.SetValue(VerticalAlignmentProperty, VerticalAlignment.Center);
-        icon.SetValue(MarginProperty, new Thickness(0, 0, 10, 0));
         icon.SetValue(Shape.StretchProperty, Stretch.Uniform);
-        icon.SetValue(Shape.StrokeProperty, SoftKeyPopupDesign.ActionText);
-        icon.SetValue(Shape.StrokeThicknessProperty, 1.45);
+        icon.SetValue(Shape.StrokeProperty, SoftKeyPopupDesign.Accent);
+        icon.SetValue(Shape.StrokeThicknessProperty, 1.5);
         icon.SetValue(Shape.StrokeLineJoinProperty, PenLineJoin.Round);
+        icon.SetValue(Shape.StrokeStartLineCapProperty, PenLineCap.Round);
+        icon.SetValue(Shape.StrokeEndLineCapProperty, PenLineCap.Round);
         var iconStyle = new Style(typeof(Path));
         foreach (var (kind, drawing) in new[]
         {
-            (SavedTextKind.Email, "M 1,3 H 19 V 17 H 1 Z M 1,4 L 10,11 L 19,4"),
-            (SavedTextKind.Password, "M 5,9 V 6 A 5,5 0 0 1 15,6 V 9 M 3,9 H 17 V 19 H 3 Z M 10,13 V 15"),
+            (SavedTextKind.Email, "M 2.5,5.5 Q 2.5,4 4,4 H 16 Q 17.5,4 17.5,5.5 V 14.5 Q 17.5,16 16,16 H 4 Q 2.5,16 2.5,14.5 Z M 3.2,5.2 L 10,10.5 L 16.8,5.2"),
+            (SavedTextKind.Password, SoftKeySettingsDesign.LockGlyph),
             (SavedTextKind.Phone, PhoneNumberWindow.PhoneIconGeometry)
         })
         {
@@ -236,25 +247,29 @@ sealed class SavedSuggestionsPage : UserControl
             iconStyle.Triggers.Add(state);
         }
         icon.SetValue(StyleProperty, iconStyle);
-        row.AppendChild(icon);
+        iconTile.AppendChild(icon);
+        row.AppendChild(iconTile);
+
         var labels = new FrameworkElementFactory(typeof(StackPanel));
         labels.SetValue(VerticalAlignmentProperty, VerticalAlignment.Center);
         var label = new FrameworkElementFactory(typeof(TextBlock));
         label.SetBinding(TextBlock.TextProperty, new Binding(nameof(SavedTextEntry.Name)));
         label.SetValue(TextBlock.FontWeightProperty, FontWeights.SemiBold);
+        label.SetValue(TextBlock.ForegroundProperty, SoftKeyPopupDesign.PrimaryText);
         label.SetValue(TextBlock.TextTrimmingProperty, TextTrimming.CharacterEllipsis);
         labels.AppendChild(label);
         var type = new FrameworkElementFactory(typeof(TextBlock));
         type.SetBinding(TextBlock.TextProperty, new Binding(nameof(SavedTextEntry.KindLabel)));
-        type.SetValue(TextBlock.ForegroundProperty, SoftKeyPopupDesign.ActionText);
+        type.SetValue(TextBlock.ForegroundProperty, SoftKeyPopupDesign.SecondaryText);
         type.SetValue(TextBlock.FontSizeProperty, 12.0);
+        type.SetValue(MarginProperty, new Thickness(0, 1.5, 0, 0));
         labels.AppendChild(type);
         row.AppendChild(labels);
         entries.ItemTemplate = new DataTemplate { VisualTree = row };
         var style = new Style(typeof(ListBoxItem));
-        style.Setters.Add(new Setter(MinHeightProperty, 47.0));
-        style.Setters.Add(new Setter(PaddingProperty, new Thickness(11, 3, 11, 3)));
-        style.Setters.Add(new Setter(MarginProperty, new Thickness(3, 2, 3, 0)));
+        style.Setters.Add(new Setter(MinHeightProperty, 54.0));
+        style.Setters.Add(new Setter(PaddingProperty, new Thickness(10, 5, 11, 5)));
+        style.Setters.Add(new Setter(MarginProperty, new Thickness(3, 2, 3, 2)));
         style.Setters.Add(new Setter(TemplateProperty, ChoiceTemplate(typeof(ListBoxItem), ListBoxItem.IsSelectedProperty)));
         entries.ItemContainerStyle = style;
         entries.FontSize = 13;
@@ -264,9 +279,14 @@ sealed class SavedSuggestionsPage : UserControl
         var body = new Grid { MinHeight = 151, MaxHeight = 208 };
         body.Children.Add(entries);
         body.Children.Add(empty);
-        empty.Foreground = SoftKeyPopupDesign.ActionText;
-        return new Border { Child = body, Background = SoftKeyPopupDesign.DialogSurface,
-            BorderBrush = SoftKeyPopupDesign.CardBorder, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(9) };
+        empty.Foreground = SoftKeyPopupDesign.SecondaryText;
+        return new Border
+        {
+            Child = body, Background = SoftKeyPopupDesign.CardSurface,
+            BorderBrush = SoftKeyPopupDesign.CardBorder, BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(SoftKeyPopupDesign.CardCornerRadius),
+            Padding = new Thickness(2, 2, 2, 2)
+        };
     }
 
     static Button ActionButton(string label, bool primary = false)
