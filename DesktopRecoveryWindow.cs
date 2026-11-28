@@ -55,9 +55,9 @@ sealed class DesktopRecoveryWindow : Window
                 else if (Contains(cancel, point)) over = cancel;
             }
             // Require a fresh entry onto a button after the prompt appears.
-            if (over == null) { armed = true; dwell.ObserveMovement(point.X, point.Y, jitterPx); dwell.Reset(); return; }
-            if (!armed) return;
             double now = Environment.TickCount64;
+            if (over == null) { armed = true; dwell.ObserveMovement(point.X, point.Y, jitterPx, now); dwell.Reset(); return; }
+            if (!armed) return;
             if (!dwell.Update(point.X, point.Y, DwellTarget.SoftKeyControl, now, Math.Max(1500, dwellMs), jitterPx, false, over)) return;
             dwell.Complete(now, false);
             if (over == confirm) Confirm();

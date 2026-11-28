@@ -258,12 +258,22 @@ static class StartupChecks
             "a disappearing target and a popup cannot rearm a stationary click");
         Check(!Tick(23, 3500, DwellTarget.SoftKeyControl, "adjacent")
             && !Tick(24, 4400, DwellTarget.SoftKeyControl, "adjacent")
+            && !Tick(24, 4520, DwellTarget.SoftKeyControl, "adjacent")
             && !Tick(24, 5199, DwellTarget.SoftKeyControl, "adjacent") && Tick(24, 5200, DwellTarget.SoftKeyControl, "adjacent"),
-            "a four-pixel movement inside the normal tolerance rearms a nearby control with a full dwell");
+            "a stable four-pixel movement rearms a nearby control within the usual dwell time");
         tracker.Complete(5200, allowRepeat: false);
-        Check(tracker.ObserveMovement(24, 24, 10) && !Tick(24, 5300, DwellTarget.SoftKeyControl, "adjacent")
-            && Tick(24, 6100, DwellTarget.SoftKeyControl, "adjacent"),
-            "vertical movement also rearms the same control after moving away and back");
+        Check(tracker.ObserveMovement(24, 24, 10, 5240) && tracker.ObserveMovement(24, 24, 10, 5360)
+            && !Tick(24, 5400, DwellTarget.SoftKeyControl, "adjacent") && Tick(24, 6200, DwellTarget.SoftKeyControl, "adjacent"),
+            "a confirmed vertical departure rearms the same control after moving away and back");
+
+        tracker = new DwellTracker();
+        bool KeyAt(int x, double now) => tracker.Update(x, 20, DwellTarget.SoftKeyRepeat, now, 750, 100, false, "same key");
+        Check(!KeyAt(20, 0) && KeyAt(20, 750), "the first click still uses the selected time and tolerance");
+        tracker.Complete(750, allowRepeat: false);
+        Check(!KeyAt(24, 790) && !KeyAt(25, 830) && !KeyAt(21, 870) && !KeyAt(21, 1620),
+            "a brief pointer excursion and return cannot click the same key again with a broad dwell tolerance");
+        Check(!KeyAt(24, 1660) && !KeyAt(24, 2410) && !KeyAt(24, 2530) && KeyAt(24, 3160),
+            "a gap in pointer samples restarts confirmation and the tentative dwell");
 
         tracker = new DwellTracker();
         Tick(20, 0, DwellTarget.SoftKeyRepeat, "key", repeat: true);
@@ -283,13 +293,14 @@ static class StartupChecks
         tracker.Suppress(21, 20);
         Check(!Tick(21, 4100, DwellTarget.External, "new") && !Tick(21, 4900, DwellTarget.External, "new")
             && !Tick(24, 5000, DwellTarget.External, "new") && !Tick(25, 5800, DwellTarget.External, "new")
+            && !Tick(25, 5920, DwellTarget.External, "new")
             && Tick(25, 6600, DwellTarget.External, "new"),
-            "explicit suppression holds across target changes until the pointer has moved four pixels");
+            "explicit suppression holds across target changes until a four-pixel departure is confirmed");
 
         tracker = new DwellTracker();
         Tick(20, 0, DwellTarget.External, "new");
         int visit = tracker.VisitVersion;
-        Check(tracker.ObserveMovement(31, 20, 10) && tracker.VisitVersion != visit
+        Check(tracker.ObserveMovement(31, 20, 10, 400) && tracker.VisitVersion != visit
             && !Tick(20, 800, DwellTarget.External, "new") && Tick(20, 1600, DwellTarget.External, "new"),
             "movement while a target query is pending invalidates the old visit before the cursor returns");
     }

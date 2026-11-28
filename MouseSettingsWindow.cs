@@ -194,7 +194,7 @@ class MouseSettingsWindow : Window
 
     internal bool UpdateDwellPreview(Native.POINT point, double now)
     {
-        previewTracker.ObserveMovement(point.X, point.Y, previewTolerance);
+        previewTracker.ObserveMovement(point.X, point.Y, previewTolerance, now);
         if (PresentationSource.FromVisual(preview) is not HwndSource source || !preview.IsVisible
             || !Native.IsWindowAt(point, source.Handle)
             || !new Rect(preview.RenderSize).Contains(preview.PointFromScreen(new Point(point.X, point.Y))))

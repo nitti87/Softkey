@@ -138,8 +138,8 @@ partial class KeyboardWindow
             dwellTracker.Reset();
             return;
         }
-        bool canStartDwell = dwellTracker.ObserveMovement(p.X, p.Y, cfg.JitterPx);
         double now = DwellClock;
+        bool canStartDwell = dwellTracker.ObserveMovement(p.X, p.Y, cfg.JitterPx, now);
         if (mouseWin?.UpdateDwellPreview(p, now) == true)
         {
             desktopDwellTargets?.Leave();

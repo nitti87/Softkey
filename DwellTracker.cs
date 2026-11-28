@@ -6,12 +6,16 @@ enum DwellTarget { None, AutoClick, RightClick, DoubleClick, Drag, DragDrop, Mov
 sealed class DwellTracker
 {
     const int RearmDistancePx = 4;
+    const int RearmDelayMs = 120;
+    const int MaxRearmSampleGapMs = 200;
     int anchorX, anchorY;
     double since;
     DwellTarget target;
     object control;
     (int X, int Y) lastPoint;
     (int X, int Y)? clickPoint;
+    double? outsideClickAreaSince;
+    double lastOutsideSample;
     bool initialized, repeating;
 
     public int VisitVersion { get; private set; }
@@ -29,26 +33,43 @@ sealed class DwellTracker
         => Math.Abs((long)x - fromX) > tolerance || Math.Abs((long)y - fromY) > tolerance;
 
     // Sample movement even when control identification is still running on a worker.
-    public bool ObserveMovement(int x, int y, int jitterPx)
+    public bool ObserveMovement(int x, int y, int jitterPx, double now)
     {
-        if (clickPoint is { } origin && MovedBeyond(x, y, origin.X, origin.Y, RearmDistancePx - 1))
+        if (clickPoint is { } origin)
         {
-            clickPoint = null;
-            if (!repeating) Reset();
+            if (MovedBeyond(x, y, origin.X, origin.Y, RearmDistancePx - 1))
+            {
+                if (!outsideClickAreaSince.HasValue || now - lastOutsideSample > MaxRearmSampleGapMs)
+                {
+                    outsideClickAreaSince = now;
+                    if (!repeating) Reset();
+                }
+                lastOutsideSample = now;
+                if (now - outsideClickAreaSince.Value >= RearmDelayMs)
+                {
+                    clickPoint = null;
+                    outsideClickAreaSince = null;
+                }
+            }
+            else if (outsideClickAreaSince.HasValue)
+            {
+                outsideClickAreaSince = null;
+                if (!repeating) Reset();
+            }
         }
         if (initialized && MovedBeyond(x, y, anchorX, anchorY, jitterPx)) Reset();
-        return repeating || !clickPoint.HasValue;
+        return repeating || !clickPoint.HasValue || outsideClickAreaSince.HasValue;
     }
 
     public bool Update(int x, int y, DwellTarget nextTarget, double now, int dwellMs, int jitterPx, bool repeat,
         object nextControl = null)
     {
-        if (!ObserveMovement(x, y, jitterPx)) return false;
+        if (!ObserveMovement(x, y, jitterPx, now)) return false;
         if (nextTarget == DwellTarget.None) { Reset(); return false; }
         if (!initialized || target != nextTarget || !Equals(control, nextControl))
         {
             // An enabled repeat belongs to the control that was clicked.
-            if (clickPoint.HasValue) { Reset(); return false; }
+            if (clickPoint.HasValue && !outsideClickAreaSince.HasValue) { Reset(); return false; }
             anchorX = x;
             anchorY = y;
             target = nextTarget;
@@ -60,12 +81,14 @@ sealed class DwellTracker
             return false;
         }
         lastPoint = (x, y);
-        return (!repeating || repeat) && now - since >= dwellMs;
+        // The current target can accumulate dwell time while the pointer's departure is being confirmed.
+        return (repeating ? repeat : !clickPoint.HasValue) && now - since >= dwellMs;
     }
 
     public void Complete(double now, bool allowRepeat)
     {
         if (initialized) clickPoint = lastPoint;
+        outsideClickAreaSince = null;
         repeating = initialized && allowRepeat;
         since = now;
     }
@@ -73,7 +96,7 @@ sealed class DwellTracker
     public double Progress(double now, int dwellMs)
     {
         if (!initialized) return 0;
-        if (clickPoint.HasValue && !repeating) return 1;
+        if (clickPoint.HasValue && !repeating && !outsideClickAreaSince.HasValue) return 1;
         return Math.Clamp((now - since) / dwellMs, 0, 1);
     }
 
@@ -81,5 +104,6 @@ sealed class DwellTracker
     {
         Reset();
         clickPoint = (x, y);
+        outsideClickAreaSince = null;
     }
 }
