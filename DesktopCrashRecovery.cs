@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Security;
+using System.Security.AccessControl;
 using System.Security.Cryptography;
 using System.Security.Principal;
 using System.Text;
@@ -18,6 +19,11 @@ static class DesktopCrashRecovery
     public const string WatchArgument = "--watch-desktop";
     const int MaxRestarts = 2;
     const long StableRunMs = 60_000;
+    const long RecoveryPromptIntervalMs = 60_000;
+    const uint WaitTimeout = 258;
+    const uint RestartUnresponsiveExitCode = 1;
+    static string HeartbeatName(int processId, long creationTime)
+        => FormattableString.Invariant($@"Local\SoftKey.DesktopHeartbeat.v1.{processId}.{creationTime}");
 
     internal static bool TryReadAttempt(string value, out int attempt) =>
         int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out attempt) && attempt is >= 1 and <= MaxRestarts;
@@ -29,9 +35,16 @@ static class DesktopCrashRecovery
         return attempted < MaxRestarts ? attempted + 1 : null;
     }
 
-    public static void StartWatching(int attempted)
+    public static EventWaitHandle StartWatching(int attempted)
     {
-        if (!KeyboardLayoutSettings.IsInstalled) return;
+        if (!KeyboardLayoutSettings.IsInstalled) return null;
+        using var current = Process.GetCurrentProcess();
+        int processId = current.Id;
+        long creationTime = current.StartTime.ToFileTimeUtc();
+        EventWaitHandle heartbeat = null;
+        try { heartbeat = new EventWaitHandle(false, EventResetMode.AutoReset, HeartbeatName(processId, creationTime)); }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or WaitHandleCannotBeOpenedException)
+        { Trace.TraceWarning("SoftKey kunde inte skapa sin signal till kraschbevakaren ({0}).", ex.GetType().Name); }
         _ = Task.Run(() =>
         {
             try
@@ -39,7 +52,6 @@ static class DesktopCrashRecovery
                 string root = AppContext.BaseDirectory;
                 var installation = new StartupInstallation(root, root);
                 installation.Validate(login: false, automatic: false);
-                using var current = Process.GetCurrentProcess();
                 var start = new ProcessStartInfo(installation.HelperExecutable)
                 {
                     UseShellExecute = false,
@@ -47,8 +59,8 @@ static class DesktopCrashRecovery
                     WorkingDirectory = root
                 };
                 start.ArgumentList.Add(WatchArgument);
-                start.ArgumentList.Add(current.Id.ToString(CultureInfo.InvariantCulture));
-                start.ArgumentList.Add(current.StartTime.ToFileTimeUtc().ToString(CultureInfo.InvariantCulture));
+                start.ArgumentList.Add(processId.ToString(CultureInfo.InvariantCulture));
+                start.ArgumentList.Add(creationTime.ToString(CultureInfo.InvariantCulture));
                 start.ArgumentList.Add(attempted.ToString(CultureInfo.InvariantCulture));
                 using var watcher = Process.Start(start);
             }
@@ -58,6 +70,7 @@ static class DesktopCrashRecovery
                 Trace.TraceWarning("SoftKeys kraschövervakning kunde inte starta ({0}).", ex.GetType().Name);
             }
         });
+        return heartbeat;
     }
 
     public static int Watch(int processId, long creationTime, int attempted)
@@ -75,6 +88,13 @@ static class DesktopCrashRecovery
         if (observed == null) return 2;
         LogonDiagnostics.Record("desktop-recovery-watching");
         var run = Stopwatch.StartNew();
+        using var heartbeat = OpenHeartbeat(processId, creationTime);
+        if (heartbeat != null)
+        {
+            try { WatchForUnresponsiveDesktop(observed, heartbeat, processId, creationTime, process.SessionId, sid, installation, attempted, run); }
+            catch (Exception ex) when (!SoftKeyResilience.IsFatal(ex))
+            { Trace.TraceWarning("SoftKeys reservdialog kunde inte visas ({0}).", ex.GetType().Name); }
+        }
         if (WaitForExit(observed) is not uint exitCode) return 1;
         if (exitCode == 0) return 0;
         if (NextAttempt(exitCode, attempted, run.ElapsedMilliseconds) is not int next)
@@ -90,10 +110,58 @@ static class DesktopCrashRecovery
         return restarted ? 0 : 1;
     }
 
-    internal static SafeProcessHandle OpenObservedProcess(int pid, long creationTime, int sessionId, string sid, string expectedPath)
+    static EventWaitHandle OpenHeartbeat(int processId, long creationTime)
     {
-        const uint Synchronize = 0x100000, QueryLimitedInformation = 0x1000, TokenQuery = 8;
-        var handle = OpenProcess(Synchronize | QueryLimitedInformation, false, pid);
+        try
+        {
+            return EventWaitHandleAcl.TryOpenExisting(HeartbeatName(processId, creationTime), EventWaitHandleRights.Synchronize,
+                out var heartbeat) ? heartbeat : null;
+        }
+        catch (UnauthorizedAccessException) { return null; }
+    }
+
+    static void WatchForUnresponsiveDesktop(SafeProcessHandle observed, EventWaitHandle heartbeat, int processId,
+        long creationTime, int sessionId, string sid, StartupInstallation installation, int attempted, Stopwatch run)
+    {
+        var monitor = new DesktopHangMonitor();
+        long nextOffer = 0;
+        bool Unresponsive()
+        {
+            bool active = LockSession.IsLocked == false && DesktopContext.IsCurrentInputDesktop;
+            bool hung = monitor.Observe(run.ElapsedMilliseconds, heartbeat.WaitOne(0), active);
+            if (!hung) nextOffer = 0;
+            return hung && WaitForSingleObject(observed, 0) == WaitTimeout;
+        }
+
+        bool CanRestart() => NextAttempt(RestartUnresponsiveExitCode, attempted, run.ElapsedMilliseconds).HasValue;
+        bool ConfirmRestart()
+        {
+            if (!Unresponsive() || !CanRestart()) return false;
+            using var restart = OpenObservedProcess(processId, creationTime, sessionId, sid, installation.MainExecutable, canTerminate: true);
+            bool stopped = restart != null && Unresponsive() && TerminateProcess(restart, RestartUnresponsiveExitCode);
+            LogonDiagnostics.Record(stopped ? "desktop-recovery-restart-confirmed" : "desktop-recovery-restart-failed");
+            return stopped;
+        }
+
+        while (WaitForSingleObject(observed, 1000) == WaitTimeout)
+        {
+            if (!Unresponsive() || run.ElapsedMilliseconds < nextOffer || !CanRestart()) continue;
+            LogonDiagnostics.Record("desktop-recovery-unresponsive");
+            var timing = SoftKeyStorage.Default.Load("settings.json", new Settings());
+            timing.Normalize();
+            if (new DesktopRecoveryWindow(Unresponsive, ConfirmRestart, timing.DwellMs, timing.JitterPx).ShowDialog() == true)
+                return;
+            if (Unresponsive()) nextOffer = run.ElapsedMilliseconds + RecoveryPromptIntervalMs;
+        }
+    }
+
+    internal static SafeProcessHandle OpenObservedProcess(int pid, long creationTime, int sessionId, string sid, string expectedPath,
+        bool canTerminate = false)
+    {
+        const uint Synchronize = 0x100000, QueryLimitedInformation = 0x1000, TokenQuery = 8, ProcessTerminate = 1;
+        uint access = Synchronize | QueryLimitedInformation;
+        if (canTerminate) access |= ProcessTerminate;
+        var handle = OpenProcess(access, false, pid);
         var image = new StringBuilder(32_768);
         uint length = (uint)image.Capacity;
         if (!handle.IsInvalid && GetProcessTimes(handle, out long created, out _, out _, out _) && created == creationTime
@@ -121,4 +189,20 @@ static class DesktopCrashRecovery
     [DllImport("advapi32.dll")] static extern bool OpenProcessToken(SafeProcessHandle process, uint access, out SafeAccessTokenHandle token);
     [DllImport("kernel32.dll")] static extern uint WaitForSingleObject(SafeProcessHandle handle, uint milliseconds);
     [DllImport("kernel32.dll")] static extern bool GetExitCodeProcess(SafeProcessHandle process, out uint exitCode);
+    [DllImport("kernel32.dll")] static extern bool TerminateProcess(SafeProcessHandle process, uint exitCode);
+}
+
+sealed class DesktopHangMonitor
+{
+    const long UnresponsiveMs = 30_000, MaxObservationGapMs = 3_000;
+    long? lastObservation, lastResponse;
+
+    public bool Observe(long now, bool heartbeat, bool active)
+    {
+        // Require a working desktop first and a continuous interval on that desktop.
+        if (heartbeat) lastResponse = now;
+        else if (lastResponse.HasValue && (!active || now - lastObservation > MaxObservationGapMs)) lastResponse = now;
+        lastObservation = now;
+        return active && lastResponse is long response && now - response >= UnresponsiveMs;
+    }
 }

@@ -66,7 +66,7 @@ partial class KeyboardWindow
 
     async void PollDesktopTyping(object sender, EventArgs e)
     {
-        if (desktopSessionSuspended || !IsVisible) return;
+        if (inputRecoveryPending || desktopSessionSuspended || !IsVisible) return;
         if (desktopCapsHook == IntPtr.Zero) capsLockOn = Native.CapsLockOn;
         RefreshKeyboardLabels();
         if (checkingDisplayedWord || mainWindowActionsLocked) return;
@@ -146,7 +146,7 @@ partial class KeyboardWindow
 
     async void PickEmail(int index)
     {
-        if (!ShowingEmailSuggestions || emailInsertion != null || focusedSuggestionField is not { Kind: DesktopInputKind.Email } target
+        if (inputRecoveryPending || !ShowingEmailSuggestions || emailInsertion != null || focusedSuggestionField is not { Kind: DesktopInputKind.Email } target
             || sugg[index].Content is not string { Length: > 0 } address) return;
         if (lockedModifiers.Count > 0)
         {

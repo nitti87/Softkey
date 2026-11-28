@@ -41,6 +41,9 @@ static class StartupChecks
             if (args.Length == 1 && args[0] == "--desktop-recovery")
             {
                 DesktopRecovery();
+                var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+                DesktopRecoveryDialog();
+                app.Shutdown();
                 Console.WriteLine($"All {checks} desktop recovery checks passed.");
                 return 0;
             }
@@ -153,6 +156,17 @@ static class StartupChecks
             && !DesktopCrashRecovery.TryReadAttempt("3", out _) && !DesktopCrashRecovery.TryReadAttempt("-1", out _),
             "launch arguments cannot extend the allowed number of recovery attempts");
 
+        var hang = new DesktopHangMonitor();
+        Check(!hang.Observe(60_000, false, true), "the hang monitor waits for the first desktop heartbeat");
+        Check(!hang.Observe(61_000, true, true), "a heartbeat establishes that the desktop has started");
+        for (int now = 62_000; now <= 90_000; now += 1000) hang.Observe(now, false, true);
+        Check(hang.Observe(91_000, false, true) && !hang.Observe(91_100, true, true),
+            "thirty seconds of missed heartbeats opens the recovery path, and a response ends it");
+        Check(!hang.Observe(122_000, false, true), "a large polling gap such as sleep does not count as a hang");
+        for (int now = 123_000; now <= 151_000; now += 1000) hang.Observe(now, false, true);
+        Check(!hang.Observe(152_000, false, false) && !hang.Observe(153_000, false, true),
+            "the lock screen resets the hang interval before returning to the desktop");
+
         using var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
         string executable = Environment.ProcessPath;
         foreach (uint exitCode in new uint[] { 0, abnormalExit })
@@ -179,6 +193,50 @@ static class StartupChecks
             release.Set();
             Check(DesktopCrashRecovery.WaitForExit(watched) == exitCode,
                 exitCode == 0 ? "a real clean process exit reports zero" : "a real abnormal process exit preserves the Windows failure code");
+        }
+    }
+
+    static void DesktopRecoveryDialog()
+    {
+        int restartRequests = 0;
+        bool unresponsive = true, canRestart = false;
+        var dialog = NewDialog();
+        var answer = Show(dialog, button =>
+        {
+            Check(restartRequests == 0 && button.ActualHeight >= 42,
+                "the reserve dialog provides a large restart target and waits for confirmation");
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(restartRequests == 1 && dialog.IsVisible, "a rejected restart leaves the reserve dialog available");
+            canRestart = true;
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        });
+        Check(answer == true && restartRequests == 2, "only confirmation asks the watcher to restart");
+
+        var responding = NewDialog();
+        answer = Show(responding, button =>
+        {
+            unresponsive = false;
+            button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        });
+        Check(answer != true && restartRequests == 2, "the reserve dialog will not restart a keyboard that responds again");
+
+        DesktopRecoveryWindow NewDialog() => new(() => unresponsive, () => { restartRequests++; return canRestart; }, 800, 10)
+        {
+            WindowStartupLocation = WindowStartupLocation.Manual, Left = -10_000, Top = -10_000, ShowActivated = false
+        };
+
+        static bool? Show(DesktopRecoveryWindow window, Action<Button> interact)
+        {
+            Exception error = null;
+            window.Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+            {
+                try { interact(Descendants<Button>(window).Single(button => Equals(button.Content, "Starta om"))); }
+                catch (Exception ex) { error = ex; }
+                finally { if (window.IsVisible) window.Close(); }
+            }));
+            bool? result = window.ShowDialog();
+            if (error != null) throw error;
+            return result;
         }
     }
 

@@ -2,6 +2,7 @@ using System;
 using System.Security.Principal;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Threading;
 
 // Startpunkten: skapar programmet och öppnar tangentbordsfönstret.
 static class Program
@@ -35,7 +36,10 @@ static class Program
             if (!instance.IsOwner) { SingleInstance.NotifyExisting(); return; }
             using var identity = WindowsIdentity.GetCurrent();
             using var ready = DesktopStartupReady.Create(identity.User.Value);
-            DesktopCrashRecovery.StartWatching(recoveryAttempt);
+            using var heartbeat = DesktopCrashRecovery.StartWatching(recoveryAttempt);
+            var pulse = heartbeat == null ? null : new DispatcherTimer(DispatcherPriority.Background)
+                { Interval = TimeSpan.FromSeconds(1) };
+            if (pulse != null) pulse.Tick += (_, _) => heartbeat.Set();
             var app = new Application();
             var window = new KeyboardWindow();
             SoftKeyResilience.Attach(app, "desktop", window.RecoverFromTransientError);
@@ -43,10 +47,13 @@ static class Program
             window.EnableDesktopSessionTracking(startupReady: () =>
             {
                 ready?.Set();
+                heartbeat?.Set();
+                pulse?.Start();
                 LogonDiagnostics.Record("desktop-keyboard-shown");
                 _ = Task.Run(SoftKeyUpdates.PruneInstalledPackageCache);
             });
-            Environment.ExitCode = app.Run(window);
+            try { Environment.ExitCode = app.Run(window); }
+            finally { pulse?.Stop(); }
         }
     }
 

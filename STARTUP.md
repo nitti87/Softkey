@@ -4,7 +4,9 @@
 
 Den installerade skrivbordsappen startar en liten bevakare i den befintliga signerade komponenten `SoftKey.Startup.exe`. Bevakaren väntar på den exakta skrivbordsprocessen i samma användarsession och använder Windows avslutskod för att skilja ett felavslut från en normal stängning. Det gäller även när SoftKey öppnas från en genväg. Bevakaren avslutas när programmet stängs normalt, inklusive när Windows låser datorn.
 
-Vid ett felavslut kan den verifierade startvägen öppna SoftKey med den sparade profilen på det aktiva, upplåsta skrivbordet. Den befintliga instanskontrollen förhindrar dubbla tangentbord. Två snabba återstartsförsök är tillåtna. Efter en minuts drift är båda försöken tillgängliga igen. Funktionens första version gäller felavslut. En process som fryser och fortsätter köra samt en oberoende reserv för PIN-skärmen kräver egna lösningar.
+Vid ett felavslut kan den verifierade startvägen öppna SoftKey med den sparade profilen på det aktiva, upplåsta skrivbordet. Den befintliga instanskontrollen förhindrar dubbla tangentbord. Två snabba återstartsförsök är tillåtna. Efter en minuts drift är båda försöken tillgängliga igen.
+
+När skrivbordstangentbordet har visats skickar dess gränssnitt en signal varje sekund. Om signalen uteblir i 30 sekunder på det aktiva, upplåsta skrivbordet kan den signerade startkomponenten visa en egen reservdialog. Välj **Starta om** med klick eller genom att vila pekaren på knappen. Bevakaren kontrollerar att samma process fortfarande saknar svar innan den avslutar den. Om tangentbordet börjar svara igen stängs dialogen. Reservdialogen gäller skrivbordet. En oberoende reserv för PIN-skärmen återstår.
 
 De riktade proven kontrollerade både normala och avvikande avslut hos en testprocess, kontroll av processidentitet och gränsen för återstarter. Simulerade Windows-låsningar stängde appen normalt i båda vägarna. Det installerade tangentbordet startade och hade en egen körande bevakare i samma session. Ett framprovocerat felavslut i användarens aktiva tangentbord ingick inte i installationstestet. Se [UIACCESS.md](UIACCESS.md) för verifieringen.
 

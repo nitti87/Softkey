@@ -16,6 +16,8 @@ partial class KeyboardWindow
 
     readonly DwellTracker dwellTracker = new();
     DesktopDwellTargets desktopDwellTargets;
+    bool inputRecoveryPending;
+    const string InputRecoveryStatus = "SoftKey återställer inmatningen…";
     IntPtr foregroundEventHook, windowShowEventHook;
     WinEventProc topmostEventProc;
     bool topmostReassertQueued;
@@ -100,7 +102,7 @@ partial class KeyboardWindow
 
     void UpdateDwellTimer()
     {
-        if (!desktopSessionSuspended && (cfg.AutoClick || mouseActions.HeldDragButton.HasValue
+        if (!desktopSessionSuspended && (inputRecoveryPending || cfg.AutoClick || mouseActions.HeldDragButton.HasValue
             || dragKeyWin?.IsVisible == true || IsDragKeyDocked || mouseWin?.IsVisible == true))
             dwellTimer.Start();
         else dwellTimer.Stop();
@@ -113,6 +115,16 @@ partial class KeyboardWindow
             mouseWin?.ResetDwellPreview();
             desktopDwellTargets?.Leave();
             dwellTracker.Reset();
+            return;
+        }
+        if (inputRecoveryPending)
+        {
+            ReleaseRecoveredInput();
+            if (!inputRecoveryPending)
+            {
+                SuppressCurrentDwell();
+                UpdateDwellTimer();
+            }
             return;
         }
         if (secureMode) RefreshKeyboardLabels();
@@ -156,7 +168,7 @@ partial class KeyboardWindow
     bool DwellDesktopActive() => !desktopSessionSuspended && (!secureMode || inputDesktopActive());
 
     bool IsDwellTargetEnabled(DwellTarget target)
-        => target != DwellTarget.None && (cfg.AutoClick || target == DwellTarget.AutoClick);
+        => !inputRecoveryPending && target != DwellTarget.None && (cfg.AutoClick || target == DwellTarget.AutoClick);
 
     bool CanRepeatDwell(DwellTarget target)
         => cfg.Repeat && (target == DwellTarget.SoftKeyRepeat
@@ -286,12 +298,28 @@ partial class KeyboardWindow
 
     internal void RecoverFromTransientError()
     {
+        inputRecoveryPending = true;
+        UpdateDwellTimer();
+        // Keep each request registered until its continuation has finished.
+        emailInsertion?.Cancel();
+        passwordVerification?.Cancel();
         desktopDwellTargets?.Leave();
-        dwellTracker.Reset();
+        SuppressCurrentDwell();
         mouseWin?.ResetDwellPreview();
-        if (mouseActions.IsWindowDragging) CancelMouseAction();
+        ReleaseRecoveredInput();
         if (openMenu >= 0) CloseMenu();
+        ClearFocusedSuggestions();
+        ClearWordBuffer();
         checkingDisplayedWord = false;
-        emailInsertion = null;
+        UpdateDwellTimer();
+    }
+
+    void ReleaseRecoveredInput()
+    {
+        bool mouseReleased = (!mouseActions.IsDragging && mouseActions.Selected == MouseAction.Left) || CancelMouseActionCore(false);
+        bool keysReleased = held.Count == 0 || ReleaseHeldModifiersCore(false);
+        inputRecoveryPending = !mouseReleased || !keysReleased;
+        if (inputRecoveryPending && statusMessage != InputRecoveryStatus) ShowStatusMessage(InputRecoveryStatus);
+        else if (!inputRecoveryPending && statusMessage == InputRecoveryStatus) ShowStatusMessage(null);
     }
 }

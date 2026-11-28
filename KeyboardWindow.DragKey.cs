@@ -192,7 +192,7 @@ partial class KeyboardWindow
 
     void ToggleDrag(MouseAction action)
     {
-        if (secureMode || desktopSessionSuspended || !cfg.AutoClick || mainWindowActionsLocked) return;
+        if (inputRecoveryPending || secureMode || desktopSessionSuspended || !cfg.AutoClick || mainWindowActionsLocked) return;
         if (action == MouseAction.RightDrag && !cfg.RightDragEnabled
             || action == MouseAction.MiddleDrag && !cfg.MiddleDragEnabled) return;
         if (mouseActions.IsDragging)
@@ -207,7 +207,7 @@ partial class KeyboardWindow
 
     void SelectMouseAction(MouseAction action)
     {
-        if (secureMode || desktopSessionSuspended || !cfg.AutoClick || mainWindowActionsLocked) return;
+        if (inputRecoveryPending || secureMode || desktopSessionSuspended || !cfg.AutoClick || mainWindowActionsLocked) return;
         mouseActions.Select(action);
         RefreshDragKey();
         SuppressCurrentDwell();

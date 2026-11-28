@@ -391,15 +391,45 @@ static class Program
         Check((bool)tryRecover.Invoke(throwingGuard, new object[] { new IOException("io") }),
             "resilience guard survives a failing recovery callback");
 
+        using var email = new CancellationTokenSource();
+        using var verification = new CancellationTokenSource();
+        int mouseReleases = 0;
+        bool allowMouseRelease = false;
+        var recoveringDrag = Activator.CreateInstance(originalActions.GetType(), (Func<int, bool>)(_ => false),
+            (Func<bool, bool>)(down => { if (down) return true; mouseReleases++; return allowMouseRelease; }),
+            (Func<bool, bool>)(_ => false), (Func<bool, bool>)(_ => false));
+        Check((bool)Call(recoveringDrag, "Select", Enum.Parse(assembly.GetType("MouseAction"), "Drag"))
+            && (bool)Call(recoveringDrag, "Perform"), "recovery test starts with a simulated external drag");
+        Set(window, "mouseActions", recoveringDrag);
+        Call(held, "Add", key);
+        Call(locked, "Add", key);
+        rejectModifierRelease = true;
         Set(window, "checkingDisplayedWord", true);
-        Set(window, "emailInsertion", new System.Threading.CancellationTokenSource());
+        Set(window, "emailInsertion", email);
+        Set(window, "passwordVerification", verification);
         Set(window, "openMenu", 1);
         Call(window, "RecoverFromTransientError");
         Check(!(bool)Get(window, "checkingDisplayedWord")
-            && Get(window, "emailInsertion") == null
+            && ReferenceEquals(Get(window, "emailInsertion"), email) && email.IsCancellationRequested
+            && verification.IsCancellationRequested
             && (int)Get(window, "openMenu") == -1
             && words.Contains("kontrollord"),
-            "transient error recovery resets interaction state without altering personal words");
+            "transient recovery cancels background input without touching personal words or discarding an unfinished request");
+        Check((bool)Get(window, "inputRecoveryPending") && mouseReleases == 1 && (bool)Call(held, "Contains", key)
+            && ((DispatcherTimer)Get(window, "dwellTimer")).IsEnabled,
+            "rejected releases keep input paused and schedule a retry even when autoclick is off");
+        int callsBeforeBlockedKey = modifierCalls;
+        Call(window, "Press", key);
+        Check(modifierCalls == callsBeforeBlockedKey, "the keyboard refuses new input while its previously held buttons are being released");
+        allowMouseRelease = true;
+        rejectModifierRelease = false;
+        Call(window, "Dwell", null, EventArgs.Empty);
+        Check(!(bool)Get(window, "inputRecoveryPending") && mouseReleases == 2 && !(bool)Call(held, "Contains", key)
+            && !(bool)Call(locked, "Contains", key) && !((DispatcherTimer)Get(window, "dwellTimer")).IsEnabled,
+            "recovery resumes after releasing exactly the simulated inputs SoftKey owned");
+        Set(window, "emailInsertion", null);
+        Set(window, "passwordVerification", null);
+        Set(window, "mouseActions", originalActions);
 
         var updatesType = assembly.GetType("SoftKeyUpdates", true);
         Check(updatesType.GetMethod("StartInfo", BindingFlags.Static | BindingFlags.NonPublic) == null

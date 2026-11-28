@@ -63,7 +63,7 @@ partial class KeyboardWindow
     void Press(KeyDef k)
     {
         if (startupWin != null || keyboardSettingsWin != null || dragKeySettingsWin != null) return;
-        if (desktopSessionSuspended || (secureMode && !inputDesktopActive())) return;
+        if (inputRecoveryPending || desktopSessionSuspended || (secureMode && !inputDesktopActive())) return;
         if (!secureMode && mainWindowActionsLocked && !btn[k].IsEnabled) return;
         bool verifyingPassword = passwordVerification != null;
         var pinWindow = verifyingPassword ? Native.WindowsHelloInputWindow() : IntPtr.Zero;
