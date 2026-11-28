@@ -259,10 +259,11 @@ static class StartupChecks
         Check(!Tick(23, 3500, DwellTarget.SoftKeyControl, "adjacent")
             && !Tick(24, 4400, DwellTarget.SoftKeyControl, "adjacent")
             && !Tick(24, 4520, DwellTarget.SoftKeyControl, "adjacent")
+            && ConfirmPointerSamples(24, 4560, 5160, 10)
             && !Tick(24, 5199, DwellTarget.SoftKeyControl, "adjacent") && Tick(24, 5200, DwellTarget.SoftKeyControl, "adjacent"),
             "a stable four-pixel movement rearms a nearby control within the usual dwell time");
         tracker.Complete(5200, allowRepeat: false);
-        Check(tracker.ObserveMovement(24, 24, 10, 5240) && tracker.ObserveMovement(24, 24, 10, 5360)
+        Check(tracker.ObserveMovement(24, 30, 10, 5240) && tracker.ObserveMovement(24, 30, 10, 5360)
             && !Tick(24, 5400, DwellTarget.SoftKeyControl, "adjacent") && Tick(24, 6200, DwellTarget.SoftKeyControl, "adjacent"),
             "a confirmed vertical departure rearms the same control after moving away and back");
 
@@ -272,8 +273,35 @@ static class StartupChecks
         tracker.Complete(750, allowRepeat: false);
         Check(!KeyAt(24, 790) && !KeyAt(25, 830) && !KeyAt(21, 870) && !KeyAt(21, 1620),
             "a brief pointer excursion and return cannot click the same key again with a broad dwell tolerance");
-        Check(!KeyAt(24, 1660) && !KeyAt(24, 2410) && !KeyAt(24, 2530) && KeyAt(24, 3160),
-            "a gap in pointer samples restarts confirmation and the tentative dwell");
+        bool driftBlocked = true;
+        for (int time = 1660; time < 3240; time += 40)
+            driftBlocked &= !KeyAt(time < 2450 ? 24 : 31, time);
+        Check(driftBlocked, "sustained small head movements stay blocked over the same key");
+        Check(!KeyAt(32, 3240) && !KeyAt(32, 3990) && !KeyAt(32, 4110) && KeyAt(32, 4740),
+            "a deliberate same-key movement starts a full dwell and a sampling gap restarts it");
+        tracker.Complete(4740, allowRepeat: false);
+        Check(!KeyAt(44, 4780) && tracker.ObserveMovement(43, 20, 100, 4820)
+            && !KeyAt(44, 4860) && !KeyAt(44, 4980) && !KeyAt(44, 5530) && KeyAt(44, 5610),
+            "motion seen during a pending hit test cancels an unconfirmed same-key departure");
+
+        tracker = new DwellTracker();
+        var windowHandle = new IntPtr(1);
+        object button = (windowHandle, "original button");
+        object windowOnly = (windowHandle, (string)null);
+        bool ExternalAt(int x, double now, object identity)
+            => tracker.Update(x, 20, DwellTarget.External, now, 750, 100, false, identity);
+        Check(!ExternalAt(20, 0, button) && ExternalAt(20, 750, button), "a recognized external button can click after one dwell");
+        tracker.Complete(750, allowRepeat: false);
+        Check(!ExternalAt(24, 790, windowOnly) && !ExternalAt(24, 910, windowOnly)
+            && ConfirmPointerSamples(24, 950, 1510, 100) && !ExternalAt(24, 1540, windowOnly),
+            "losing the control identity in the same window does not permit another click after a small movement");
+        object nextButton = (windowHandle, "next button");
+        Check(!ExternalAt(25, 1580, nextButton) && ConfirmPointerSamples(25, 1620, 2300, 100) && ExternalAt(25, 2330, nextButton),
+            "the next identified button can click after the usual dwell without needing a larger movement");
+        tracker.Complete(2330, allowRepeat: false);
+        Check(!ExternalAt(20, 2370, button) && !ExternalAt(20, 2490, button)
+            && !ExternalAt(26, 2530, nextButton) && !ExternalAt(26, 3280, nextButton),
+            "a small departure that returns to the original button cannot rearm that button");
 
         tracker = new DwellTracker();
         Tick(20, 0, DwellTarget.SoftKeyRepeat, "key", repeat: true);
@@ -303,6 +331,13 @@ static class StartupChecks
         Check(tracker.ObserveMovement(31, 20, 10, 400) && tracker.VisitVersion != visit
             && !Tick(20, 800, DwellTarget.External, "new") && Tick(20, 1600, DwellTarget.External, "new"),
             "movement while a target query is pending invalidates the old visit before the cursor returns");
+
+        bool ConfirmPointerSamples(int x, int from, int through, int tolerance)
+        {
+            for (int now = from; now <= through; now += 40)
+                if (!tracker.ObserveMovement(x, 20, tolerance, now)) return false;
+            return true;
+        }
     }
 
     static void ResponsiveWordFeedback()
