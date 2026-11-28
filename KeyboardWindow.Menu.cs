@@ -55,12 +55,13 @@ partial class KeyboardWindow
         {
             updateIndicator = CreateUpdateDot();
             var header = new Grid();
-            header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(13) });
-            header.Children.Add(new TextBlock { Text = "Arkiv", VerticalAlignment = VerticalAlignment.Center });
-            Grid.SetColumn(updateIndicator, 1);
+            header.Children.Add(new TextBlock
+            {
+                Text = "Arkiv", VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(8, 3, 8, 3)
+            });
             header.Children.Add(updateIndicator);
-            menuHeaders[0].Padding = new Thickness(8, 3, 3, 3);
+            menuHeaders[0].Padding = new Thickness(0);
             menuHeaders[0].Content = header;
             RefreshUpdateIndicator();
         }
@@ -105,9 +106,10 @@ partial class KeyboardWindow
 
     static Border CreateUpdateDot() => new()
     {
-        Width = 10, Height = 10, CornerRadius = new CornerRadius(5),
-        Background = SoftKeyKeyDesign.SlateAccent,
-        HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center,
+        Width = 5, Height = 5, CornerRadius = new CornerRadius(2.5),
+        Background = SoftKeyKeyDesign.SlateAccent, Opacity = 0.88,
+        Margin = new Thickness(0, 3, 2, 0),
+        HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top,
         IsHitTestVisible = false, SnapsToDevicePixels = true
     };
 

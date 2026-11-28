@@ -3854,7 +3854,7 @@ static class StartupChecks
                     && Field<int>(keyboard, "openMenu") == -1 && indicator.IsVisible,
                     "a release published after startup appears with no menu interaction or package request");
                 var markerBounds = indicator.TransformToAncestor(headers[0]).TransformBounds(new Rect(indicator.RenderSize));
-                Check(indicator.Background == SoftKeyKeyDesign.SlateAccent && markerBounds.Width >= 10
+                Check(indicator.Background == SoftKeyKeyDesign.SlateAccent && markerBounds.Width is >= 4 and <= 6
                     && new Rect(headers[0].RenderSize).Contains(markerBounds)
                     && Math.Abs(headers[0].ActualWidth - arkivWidthWithoutUpdate) <= 0.5,
                     "Arkiv displays the full slate marker inside the button without shifting the menu bar");
