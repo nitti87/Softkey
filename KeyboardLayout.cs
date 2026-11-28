@@ -41,7 +41,7 @@ static class KeyboardLayout
     {
         new ushort[] { 0x3B, 0x3C, 0x3D, 0x3E, 0x3F, 0x40, 0x41, 0x42, 0x43, 0x44, 0x57, 0x58 }
             .Select((scan, i) => K("F" + (i + 1), scan, 1.375)).ToArray(),
-        new[] { K("ESC", 0x01), K("§", 0x29) }
+        new[] { K("Esc", 0x01), K("§", 0x29) }
             .Concat("1234567890".Select((c, i) => K(c.ToString(), (ushort)(2 + i))))
             .Concat(new[] { K("+", 0x0C), K("´", 0x0D), K("BkSp", 0x0E, 1.5), K("Pse", 0, virtualKey: 0x13) })
             .ToArray(),
@@ -60,8 +60,8 @@ static class KeyboardLayout
         new[]
         {
             K("Ctl", 0x1D, 1.3, modifier: true), K("Win", 0x5B, 1, extended: true, modifier: true),
-            K("Alt", 0x38, 1.2, modifier: true), K("Space", 0x39, 4.5),
-            K("AltGr", 0x38, 1.2, extended: true, modifier: true), K("Win", 0x5C, 1, extended: true, modifier: true),
+            K("Alt", 0x38, 1.2, modifier: true), K("Space", 0x39, 4.35),
+            K("AltGr", 0x38, 1.35, extended: true, modifier: true), K("Win", 0x5C, 1, extended: true, modifier: true),
             K("Menu", 0x5D, 1, extended: true), K("Ctl", 0x1D, 1.3, extended: true, modifier: true),
             K("←", 0x4B, extended: true), K("→", 0x4D, extended: true), K("↑", 0x48, extended: true), K("↓", 0x50, extended: true)
         }

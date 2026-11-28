@@ -11,6 +11,7 @@ using System.Runtime.InteropServices;
 sealed class DragKeyWindow : Window
 {
     public const string DisplayName = "Dragkey";
+    public static readonly CornerRadius PanelCornerRadius = new(8);
     public const string LeftDragLabel = "Vänsterdrag", RightDragLabel = "Högerdrag", MiddleDragLabel = "Mittenknappsdrag";
     const string UndockLabel = "Avdocka " + DisplayName;
     const string PowerLabel = "Stäng SoftKey";
@@ -96,7 +97,7 @@ sealed class DragKeyWindow : Window
         titleContent.Children.Add(grip);
         title = new Border
         {
-            Height = size.TitleHeight,
+            Height = size.TitleHeight, CornerRadius = new CornerRadius(7, 7, 0, 0),
             Background = SoftKeyKeyDesign.TraySurface, Padding = new Thickness(6, 2, 6, 2),
             Cursor = Cursors.SizeAll, Child = titleContent
         };
@@ -123,7 +124,7 @@ sealed class DragKeyWindow : Window
         body.Children.Add(buttons);
         Surface = new Border
         {
-            Cursor = Cursors.SizeAll,
+            Cursor = Cursors.SizeAll, CornerRadius = PanelCornerRadius,
             Background = SoftKeyKeyDesign.WindowSurface,
             BorderBrush = SoftKeyKeyDesign.Outline, BorderThickness = new Thickness(1), Child = body
         };

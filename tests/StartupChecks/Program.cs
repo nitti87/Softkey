@@ -2673,9 +2673,9 @@ static class StartupChecks
             Check(auto.Background == SoftKeyKeyDesign.AccentFace && power.Background == SoftKeyKeyDesign.FunctionFace
                 && leftIcon.Background == SoftKeyKeyDesign.LetterFace
                 && liveGrid.Children.OfType<DragKeyButton>().Where(button => button.IsVisible).All(button =>
-                    button.Template.FindName("Frame", button) is Border face && face.CornerRadius == default
-                    && button.Template.FindName("PointerHighlight", button) is Border highlight && highlight.CornerRadius == default),
-                "the live toolbar has square faces and highlights with the existing role colors");
+                    button.Template.FindName("Frame", button) is Border face && face.CornerRadius == DragKeyButton.FaceCornerRadius
+                    && button.Template.FindName("PointerHighlight", button) is Border highlight && highlight.CornerRadius == DragKeyButton.FaceCornerRadius),
+                "the live toolbar has rounded faces and highlights with the existing role colors");
             var preview = Field<DragKeyDockPreview>(keyboard, "dragKeyDockPreview");
             preview.SetPlacement(DragKeyPlacement.Right);
             var previewGrid = Field<System.Windows.Controls.Primitives.UniformGrid>(preview, "symbols");
@@ -2687,8 +2687,8 @@ static class StartupChecks
             toolbar.SetKeyboardMoveDestination(nextDestination);
             preview.SetKeyboardMoveDestination(nextDestination);
             Check(Scaled((Viewbox)Field<DragKeyButton>(toolbar, "moveKeyboardEdge").Content, 0.85)
-                && previewGrid.Children.OfType<Border>().All(icon => icon.CornerRadius == default && Scaled((Viewbox)icon.Child, 0.85)),
-                "the dock preview uses square faces and retains the selected icon size");
+                && previewGrid.Children.OfType<Border>().All(icon => icon.CornerRadius == DragKeyButton.FaceCornerRadius && Scaled((Viewbox)icon.Child, 0.85)),
+                "the dock preview uses rounded faces and retains the selected icon size");
             Render(keyboard, Path.Combine(output, "dragkey-all-buttons.png"));
             Call(keyboard, "SetDragKeyPlacement", DragKeyPlacement.Right);
             Pump();

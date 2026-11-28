@@ -10,6 +10,8 @@ static class SoftKeyKeyDesign
 {
     public const double LegendTextScale = 1.14;
     public static readonly CornerRadius Radius = new(7);
+    public static readonly DependencyProperty IndicatorVisibleProperty = DependencyProperty.RegisterAttached(
+        "IndicatorVisible", typeof(bool), typeof(SoftKeyKeyDesign), new PropertyMetadata(false));
     public static readonly Brush WindowSurface = new SolidColorBrush(Color.FromRgb(0xEC, 0xEA, 0xE4));
     public static readonly Brush TraySurface = new SolidColorBrush(Color.FromRgb(0xDC, 0xD8, 0xCE));
     public static readonly Brush LetterFace = new SolidColorBrush(Color.FromRgb(0xFD, 0xFC, 0xFA));

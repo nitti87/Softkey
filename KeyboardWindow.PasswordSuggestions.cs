@@ -97,7 +97,7 @@ partial class KeyboardWindow
 
     static bool IsPasswordPromptKey(KeyDef key) => KeyboardLayout.IsPrintable(key)
         || key.Label is "Space" or "BkSp" or "Del" or "Hme" or "End" or "←" or "→"
-            or "Sft" or "AltGr" or "Cap" or "Enter" or "ESC" or "Tab";
+            or "Sft" or "AltGr" or "Cap" or "Enter" or "Esc" or "Tab";
 
     async Task<string> FillPassword(Guid id, IntPtr previous, DesktopWordField field)
     {

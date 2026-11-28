@@ -32,6 +32,7 @@ sealed class DragKeyDockPreview : Border
         body.Children.Add(symbols);
         panelSurface = new Border
         {
+            CornerRadius = DragKeyWindow.PanelCornerRadius,
             BorderBrush = SoftKeyKeyDesign.SlateAccent, BorderThickness = new Thickness(1),
             Background = SoftKeyKeyDesign.WindowSurface, Child = body
         };
@@ -40,6 +41,7 @@ sealed class DragKeyDockPreview : Border
 
     internal static Border PreviewButton(DragKeySymbol symbol, bool signIn = false) => new()
     {
+        CornerRadius = DragKeyButton.FaceCornerRadius,
         Background = DragKeyButton.FaceFor(symbol),
         BorderBrush = SoftKeyKeyDesign.Outline,
         BorderThickness = new Thickness(1), Child = DragKeyButton.CreateSymbol(symbol, signIn: signIn)

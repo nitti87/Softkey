@@ -9,6 +9,7 @@ enum DragKeySymbol { AutoClick, RightClick, DoubleClick, LeftDrag, MiddleDrag, K
 // Compact vector-only buttons; names and state remain available to assistive tools.
 sealed class DragKeyButton : Button
 {
+    public static readonly CornerRadius FaceCornerRadius = new(5);
     static readonly ControlTemplate ButtonTemplate = CreateTemplate();
     static readonly ScaleTransform SmallIconScale = new(0.85, 0.85);
     static readonly DependencyProperty FaceInsetProperty = DependencyProperty.Register(
@@ -108,6 +109,7 @@ sealed class DragKeyButton : Button
     {
         var template = new ControlTemplate(typeof(DragKeyButton));
         var border = new FrameworkElementFactory(typeof(Border), "Frame");
+        border.SetValue(Border.CornerRadiusProperty, FaceCornerRadius);
         foreach (var pair in new[]
         {
             (Border.BackgroundProperty, "Background"), (Border.BorderBrushProperty, "BorderBrush"),
@@ -119,6 +121,7 @@ sealed class DragKeyButton : Button
             });
         var face = new FrameworkElementFactory(typeof(Grid));
         var highlight = new FrameworkElementFactory(typeof(Border), "PointerHighlight");
+        highlight.SetValue(Border.CornerRadiusProperty, FaceCornerRadius);
         highlight.SetValue(Border.BackgroundProperty, SoftKeyKeyDesign.SlateAccent);
         highlight.SetValue(IsHitTestVisibleProperty, false);
         highlight.SetValue(OpacityProperty, 0d);
@@ -129,7 +132,7 @@ sealed class DragKeyButton : Button
         content.SetBinding(MarginProperty, new Binding(nameof(Padding)) { RelativeSource = RelativeSource.TemplatedParent });
         face.AppendChild(content);
         border.AppendChild(face);
-        var faceWithShadow = SoftKeyKeyDesign.Raised(border, shadowRadius: new CornerRadius(0));
+        var faceWithShadow = SoftKeyKeyDesign.Raised(border, shadowRadius: FaceCornerRadius);
         faceWithShadow.SetBinding(FrameworkElement.MarginProperty, new Binding(nameof(FaceInset))
         {
             RelativeSource = RelativeSource.TemplatedParent

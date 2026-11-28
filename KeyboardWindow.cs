@@ -263,6 +263,8 @@ partial class KeyboardWindow : Window
         Brush foreground = held.Any(m => m.Label == "AltGr") && KeyboardLayout.IsPrintable(key)
             ? AltGrValueColor : style.Foreground;
         Brush border = key.Label == "Enter" ? SoftKeyKeyDesign.EnterBorder : KeyBorder;
+        bool capsActive = key.Label == "Cap" && capsLockOn;
+        button.SetValue(SoftKeyKeyDesign.IndicatorVisibleProperty, capsActive);
         if (held.Contains(key) && lockedModifiers.Contains(key))
         {
             background = KeyLocked;
@@ -288,6 +290,11 @@ partial class KeyboardWindow : Window
             foreground = key.Label == "Enter" ? Brushes.White : foreground;
             border = key.Label == "Enter" ? SoftKeyKeyDesign.EnterBorder : KeyActiveBorder;
         }
+        else if (capsActive)
+        {
+            foreground = SoftKeyKeyDesign.PrimaryText;
+            border = KeyActiveBorder;
+        }
         button.Background = background;
         button.Foreground = foreground;
         button.BorderBrush = border;
@@ -309,6 +316,7 @@ partial class KeyboardWindow : Window
 
         foreach (var key in btn.Keys)
         {
+            if (key.Label == "Cap") { UpdateKeyVisual(key); continue; }
             if (!KeyboardLayout.IsPrintable(key)) continue;
             string value = Native.TranslateKey(keyboardLayout, key.Scan, key.Ext, shift, altGr, capsLockOn);
             if (altGr)
@@ -627,7 +635,7 @@ partial class KeyboardWindow : Window
                 || (EnteringWindowsHello && IsPasswordPromptKey(key))
                 || (editingWords && (KeyboardLayout.IsPrintable(key) || key.Label is "Space" or "BkSp" or "Del"
                     or "Hme" or "End" or "←" or "→" or "↑" or "↓" or "Sft" or "Ctl" or "Alt" or "AltGr"
-                    or "Cap" or "Enter" or "ESC" or "PrtScr"));
+                    or "Cap" or "Enter" or "Esc" or "PrtScr"));
             button.IsEnabled = enabled;
             button.Opacity = enabled ? 1 : 0.45;
             UpdateKeyVisual(key);
@@ -717,6 +725,7 @@ partial class KeyboardWindow : Window
         b.Tag = k;
         btn[k] = b;
         keyBaseStyle[k] = (b.Background, b.Foreground);
+        if (k.Label == "Cap") UpdateKeyVisual(k);
         return b;
     }
 
@@ -732,6 +741,7 @@ partial class KeyboardWindow : Window
         if (k.Label == "Win") button.Content = WindowsLogo();
         else if (k.Label == "Menu") button.Content = MenuKeyIcon();
         else if (k.Label is "←" or "→" or "↑" or "↓") ApplyArrowKeyIcon(button, k.Label);
+        else if (k.Label == "AltGr") button.Padding = new Thickness(2.5, 0, 2.5, 0);
         bool printableOrSpace = KeyboardLayout.IsPrintable(k) || k.Label == "Space";
         button.Background = k.Mod || k.Label == "Cap" ? SoftKeyKeyDesign.ModifierFace
             : printableOrSpace ? KeyFace : SoftKeyKeyDesign.FunctionFace;
@@ -786,10 +796,12 @@ partial class KeyboardWindow : Window
         {
             var pane = new Border
             {
-                CornerRadius = new CornerRadius(0.7),
-                Margin = new Thickness(0.75)
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(1.3),
+                CornerRadius = new CornerRadius(1.1),
+                Margin = new Thickness(0.8)
             };
-            pane.SetBinding(Border.BackgroundProperty, new System.Windows.Data.Binding("Foreground")
+            pane.SetBinding(Border.BorderBrushProperty, new System.Windows.Data.Binding("Foreground")
             {
                 RelativeSource = new System.Windows.Data.RelativeSource(System.Windows.Data.RelativeSourceMode.FindAncestor, typeof(Button), 1)
             });
@@ -854,7 +866,22 @@ partial class KeyboardWindow : Window
             border.AppendChild(fittedContent);
             var surface = new FrameworkElementFactory(typeof(KeyboardKeySurface));
             surface.SetValue(KeyboardKeySurface.InsetProperty, new TemplateBindingExtension(KeyboardKeySurface.InsetProperty));
-            template.VisualTree = SoftKeyKeyDesign.Raised(border, surface, edgeBrush: KeyShadow);
+            var raisedSurface = SoftKeyKeyDesign.Raised(border, surface, edgeBrush: KeyShadow);
+            var indicator = new FrameworkElementFactory(typeof(Border), "KeyIndicator");
+            indicator.SetValue(WidthProperty, 4.5);
+            indicator.SetValue(HeightProperty, 4.5);
+            indicator.SetValue(Border.CornerRadiusProperty, new CornerRadius(2.25));
+            indicator.SetValue(Border.BackgroundProperty, SoftKeyKeyDesign.SlateAccent);
+            indicator.SetValue(HorizontalAlignmentProperty, HorizontalAlignment.Right);
+            indicator.SetValue(VerticalAlignmentProperty, VerticalAlignment.Top);
+            indicator.SetValue(MarginProperty, new Thickness(0, 3.5, 3.5, 0));
+            indicator.SetValue(VisibilityProperty, Visibility.Collapsed);
+            indicator.SetValue(IsHitTestVisibleProperty, false);
+            raisedSurface.AppendChild(indicator);
+            var indicatorActive = new Trigger { Property = SoftKeyKeyDesign.IndicatorVisibleProperty, Value = true };
+            indicatorActive.Setters.Add(new Setter(VisibilityProperty, Visibility.Visible, "KeyIndicator"));
+            template.Triggers.Add(indicatorActive);
+            template.VisualTree = raisedSurface;
         }
         else
         {

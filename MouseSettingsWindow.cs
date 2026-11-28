@@ -393,7 +393,7 @@ class MouseSettingsWindow : Window
     public bool CanUseKey(KeyDef k)
     {
         if (isSaving) return false;
-        if (k.Label is "Ctl" or "Alt" or "PrtScr" or "Enter" or "ESC" || SecureAttention.IsChord(k, chordModifiers)) return true;
+        if (k.Label is "Ctl" or "Alt" or "PrtScr" or "Enter" or "Esc" || SecureAttention.IsChord(k, chordModifiers)) return true;
         return activeBox != null && (k.Label is "BkSp" or "Del" or "←" or "→" or "Hme" or "End"
             || (k.Label.Length == 1 && char.IsAsciiDigit(k.Label[0])));
     }
@@ -418,7 +418,7 @@ class MouseSettingsWindow : Window
         }
         if (secureAttention) { requestSecureAttention?.Invoke(); return true; }
         if (k.Label == "Enter") { _ = ApplyAndCloseAsync(); return true; }
-        if (k.Label == "ESC") { Close(); return true; }
+        if (k.Label == "Esc") { Close(); return true; }
         if (activeBox == null) return true;
         var l = k.Label;
         if (l.Length == 1 && char.IsDigit(l[0])) Edit(l, 0, 0);          // siffra: skrivs in vid markören
