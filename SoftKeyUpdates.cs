@@ -28,6 +28,7 @@ static class SoftKeyUpdates
 
     static readonly string Cache = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SoftKey", "Updates");
     static readonly Regex TagPattern = new("^softkey-preview-([1-9][0-9]*)$", RegexOptions.Compiled);
+    static readonly Regex PackagePattern = new(@"^SoftKey-update-([1-9][0-9]*)\.zip\z", RegexOptions.Compiled);
     static readonly Regex CommitPattern = new("^[0-9a-f]{40}$", RegexOptions.Compiled);
     static readonly Regex DigestPattern = new("^sha256:[0-9a-f]{64}$", RegexOptions.Compiled);
     static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
@@ -57,14 +58,48 @@ static class SoftKeyUpdates
     public static bool CanInstall => string.Equals(AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar),
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "SoftKey-UIAccess-Test"), StringComparison.OrdinalIgnoreCase);
 
-    static long InstalledBuild()
+    static long InstalledBuild() => Math.Max(BuildNumber, InstalledBuildMarker() ?? 0);
+
+    static long? InstalledBuildMarker()
     {
         string path = Path.Combine(AppContext.BaseDirectory, "installed-update-build.txt");
-        if (!CanInstall || !File.Exists(path)) return BuildNumber;
+        if (!CanInstall || !File.Exists(path)) return null;
         if (new FileInfo(path).Length > 32 || !long.TryParse(File.ReadAllText(path).Trim(),
             NumberStyles.None, CultureInfo.InvariantCulture, out long installed))
             throw new IOException("Det installerade versionsnumret kunde inte läsas.");
-        return Math.Max(BuildNumber, installed);
+        return installed;
+    }
+
+    internal static void PruneInstalledPackageCache()
+    {
+        try
+        {
+            long build = BuildNumber;
+            if (build > 0 && InstalledBuildMarker() == build) PrunePackageCache(Cache, build);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Trace.TraceWarning("SoftKey package cache cleanup skipped ({0}).", ex.GetType().Name);
+        }
+    }
+
+    internal static void PrunePackageCache(string path, long installedBuild)
+    {
+        if (installedBuild <= 0) return;
+        var cache = new DirectoryInfo(path);
+        if (!cache.Exists || (cache.Attributes & FileAttributes.ReparsePoint) != 0
+            || cache.Parent == null || (cache.Parent.Attributes & FileAttributes.ReparsePoint) != 0) return;
+        foreach (var file in cache.EnumerateFiles("SoftKey-update-*.zip"))
+        {
+            try
+            {
+                var match = PackagePattern.Match(file.Name);
+                if (match.Success && long.TryParse(match.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out long build)
+                    && build < installedBuild && (file.Attributes & FileAttributes.ReparsePoint) == 0)
+                    file.Delete();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+        }
     }
 
     sealed class GitHubRelease

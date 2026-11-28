@@ -1,5 +1,6 @@
 using System;
 using System.Security.Principal;
+using System.Threading.Tasks;
 using System.Windows;
 
 // Startpunkten: skapar programmet och öppnar tangentbordsfönstret.
@@ -43,6 +44,7 @@ static class Program
             {
                 ready?.Set();
                 LogonDiagnostics.Record("desktop-keyboard-shown");
+                _ = Task.Run(SoftKeyUpdates.PruneInstalledPackageCache);
             });
             Environment.ExitCode = app.Run(window);
         }

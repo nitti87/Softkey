@@ -23,6 +23,8 @@ static class SoftKeyUpdateInstaller
     public const string StagedArgument = "--apply-update-staged";
 
     const string RunnerPrefix = ".update-runner-";
+    const string BackupDirectoryPrefix = "update-";
+    const string PreviousBuildMarker = "previous-build";
     const string AccessibilityPath = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\Accessibility";
     const string CiPolicyPath = @"SYSTEM\CurrentControlSet\Control\CI\Policy";
     static readonly Regex CommitPattern = new("^[0-9a-f]{40}$", RegexOptions.Compiled);
@@ -212,12 +214,13 @@ static class SoftKeyUpdateInstaller
             using var installLock = new FileStream(Path.Combine(main, ".install.lock"),
                 FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None, 4096, FileOptions.DeleteOnClose);
 
-            string stage = Path.Combine(main, "update-" + Guid.NewGuid().ToString("N"));
+            string stage = Path.Combine(main, BackupDirectoryPrefix + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(stage);
             var replaced = new List<StagedFile>();
             var pausedBrokers = new List<string>();
             bool completed = false;
             bool retainRecovery = false;
+            long installedBuild = request.InstalledBuild;
 
             try
             {
@@ -225,7 +228,6 @@ static class SoftKeyUpdateInstaller
                 string packageName = FormattableString.Invariant($"SoftKey-update-{request.BuildNumber}.zip");
                 report(62, "Verifierar uppdateringen", packageName);
 
-                long installedBuild = request.InstalledBuild;
                 if (File.Exists(installedVersionPath))
                 {
                     AssertNotReparsePoint(installedVersionPath);
@@ -340,7 +342,7 @@ static class SoftKeyUpdateInstaller
                 setStep("write-installed-build");
                 string nextVersion = Path.Combine(stage, "build-number");
                 File.WriteAllText(nextVersion, manifest.BuildNumber.ToString(CultureInfo.InvariantCulture));
-                if (File.Exists(installedVersionPath)) ReplaceFileWithRetry(nextVersion, installedVersionPath, Path.Combine(stage, "previous-build"));
+                if (File.Exists(installedVersionPath)) ReplaceFileWithRetry(nextVersion, installedVersionPath, Path.Combine(stage, PreviousBuildMarker));
                 else File.Move(nextVersion, installedVersionPath);
                 completed = true;
             }
@@ -365,6 +367,9 @@ static class SoftKeyUpdateInstaller
                 if (!completed && !retainRecovery)
                     TryDeleteDirectory(stage, main);
             }
+
+            // Keep the installation lock while pruning. Cleanup is outside the rollback path.
+            PruneCompletedBackups(main, stage, installedBuild, replaced.Count);
         }
         finally
         {
@@ -724,6 +729,77 @@ static class SoftKeyUpdateInstaller
         }
         catch { }
     }
+
+    internal static void PruneCompletedBackups(string main, string retainedPath, long previousBuild, int expectedBackupCount)
+    {
+        try
+        {
+            var root = new DirectoryInfo(main);
+            var retained = new DirectoryInfo(retainedPath);
+            if (previousBuild < 0 || expectedBackupCount < SoftKeyUpdateArchive.ExpectedFiles.Length
+                || (root.Attributes & FileAttributes.ReparsePoint) != 0
+                || !IsBackupDirectory(retained, root)) return;
+
+            var retainedFiles = retained.GetFileSystemInfos();
+            if (!retainedFiles.All(IsKnownBackupFile) || !retainedFiles.Any(file => file.Name == "package.zip")
+                || retainedFiles.Count(file => file.Extension == ".backup") != expectedBackupCount) return;
+
+            string markerPath = Path.Combine(retained.FullName, PreviousBuildMarker);
+            // A first installation may have had no version stamp for File.Replace to back up.
+            if (!File.Exists(markerPath))
+            {
+                using var marker = new StreamWriter(new FileStream(markerPath, FileMode.CreateNew, FileAccess.Write, FileShare.None));
+                marker.Write(previousBuild.ToString(CultureInfo.InvariantCulture));
+            }
+            if (!TryReadBackupVersion(new FileInfo(markerPath), out long retainedBuild) || retainedBuild != previousBuild) return;
+
+            foreach (var backup in root.EnumerateDirectories(BackupDirectoryPrefix + "*"))
+            {
+                try
+                {
+                    if (!IsBackupDirectory(backup, root)
+                        || string.Equals(backup.FullName, retained.FullName, StringComparison.OrdinalIgnoreCase)) continue;
+
+                    var marker = new FileInfo(Path.Combine(backup.FullName, PreviousBuildMarker));
+                    if (!TryReadBackupVersion(marker, out long oldBuild) || oldBuild >= previousBuild) continue;
+
+                    // Completed stages are flat. Keep recovery folders, links and unfamiliar files.
+                    var entries = backup.GetFileSystemInfos();
+                    if (!entries.All(IsKnownBackupFile)) continue;
+                    foreach (var file in entries)
+                        if (file.Name != PreviousBuildMarker) File.Delete(file.FullName);
+                    // Leave the marker until the end so a locked file can be retried on the next update.
+                    marker.Delete();
+                    backup.Delete();
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Trace.TraceWarning("SoftKey backup cleanup skipped ({0}).", ex.GetType().Name);
+        }
+    }
+
+    static bool IsBackupDirectory(DirectoryInfo directory, DirectoryInfo root) =>
+        directory.Exists && (directory.Attributes & FileAttributes.ReparsePoint) == 0
+        && string.Equals(directory.Parent?.FullName, root.FullName.TrimEnd(Path.DirectorySeparatorChar), StringComparison.OrdinalIgnoreCase)
+        && directory.Name.StartsWith(BackupDirectoryPrefix, StringComparison.Ordinal)
+        && Guid.TryParseExact(directory.Name.AsSpan(BackupDirectoryPrefix.Length), "N", out _);
+
+    static bool TryReadBackupVersion(FileInfo marker, out long build)
+    {
+        build = 0;
+        return marker.Exists && (marker.Attributes & FileAttributes.ReparsePoint) == 0 && marker.Length <= 32
+            && long.TryParse(File.ReadAllText(marker.FullName).Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out build);
+    }
+
+    static bool IsKnownBackupFile(FileSystemInfo entry) =>
+        entry is FileInfo && (entry.Attributes & FileAttributes.ReparsePoint) == 0
+        && (entry.Name is "package.zip" or PreviousBuildMarker
+            || (entry.Extension == ".backup"
+                && int.TryParse(entry.Name.AsSpan(0, entry.Name.Length - entry.Extension.Length),
+                    NumberStyles.None, CultureInfo.InvariantCulture, out _)));
 
     static void TryDeleteDirectory(string path, string expectedParent)
     {

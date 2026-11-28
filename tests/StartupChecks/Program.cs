@@ -44,6 +44,14 @@ static class StartupChecks
                 Console.WriteLine($"All {checks} desktop recovery checks passed.");
                 return 0;
             }
+            if (args.Length == 1 && args[0] == "--word-list")
+            {
+                var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+                WordListRowActions();
+                app.Shutdown();
+                Console.WriteLine($"All {checks} word-list checks passed.");
+                return 0;
+            }
             if (args.Length == 2 && args[0] is "--keyboard-spacing" or "--keyboard-resize")
             {
                 string output = Path.GetFullPath(args[1]);
@@ -622,6 +630,7 @@ static class StartupChecks
         cancelWindow.ApplyAsync(true).GetAwaiter().GetResult();
         Check(cancelled.Calls == 0, "OK without an edited Startup setting makes no startup changes");
         OtherDialogs(output);
+        WordListRowActions();
         DialogPlacement();
         DwellPause();
         KeyboardVisibility(output);
@@ -3511,6 +3520,83 @@ static class StartupChecks
                 "sign-in chooses the AutoClick drawing for the actual screen pixel size");
         }
         finally { logonToolbar.CloseWithApplication(); }
+    }
+
+    static void WordListRowActions()
+    {
+        var profile = Directory.CreateTempSubdirectory("SoftKey-word-list-actions-");
+        var storage = new JsonFileStorage(profile.FullName);
+        storage.Save("settings.json", new Settings { AutoClick = false, AlwaysOnTop = false });
+        storage.Save("words.json", new Dictionary<string, int> { ["arbete"] = 1, ["frihet"] = 1, ["hemma"] = 1 });
+        var keyboard = new KeyboardWindow(storage);
+        keyboard.EnablePreviewClose();
+        try
+        {
+            ShowOffscreen(keyboard);
+            Field<DispatcherTimer>(keyboard, "desktopTypingTimer").Stop();
+            var menu = Field<Button[]>(keyboard, "menuHeaders").Single(button => Equals(button.Content, "Tangentbord"));
+            menu.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Descendants<Button>(Field<Border>(keyboard, "menuPanel")).Single(button => Equals(button.Content, "Ordlista…"))
+                .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            var editor = Field<TabbedWordListWindow>(keyboard, "wordListWin");
+            Check(editor is { IsVisible: true, IsSpecific: false }, "the real keyboard menu opens the ordinary word list");
+            var list = (ListBox)typeof(WordListWindow).GetField("wordList", Fields).GetValue(editor);
+            WordListItem Word(string text) => list.Items.Cast<WordListItem>().Single(item => item.Word == text);
+
+            var hover = (DependencyPropertyKey)typeof(UIElement).GetField("IsMouseOverPropertyKey",
+                BindingFlags.Static | BindingFlags.NonPublic).GetValue(null);
+            Button HoverAction(string word, string name)
+            {
+                var item = Word(word);
+                list.ScrollIntoView(item);
+                editor.UpdateLayout();
+                var row = (ListBoxItem)list.ItemContainerGenerator.ContainerFromItem(item);
+                var presenter = (ContentPresenter)row.Template.FindName("RowContent", row);
+                row.SetValue(hover, true);
+                try
+                {
+                    editor.UpdateLayout();
+                    var actions = (StackPanel)list.ItemTemplate.FindName("NormalActions", presenter);
+                    Check(actions.IsVisible, "hover reveals actions on the unselected word " + word);
+                    return actions.Children.OfType<Button>().Single(button => AutomationProperties.GetName(button) == name);
+                }
+                finally { row.ClearValue(hover); }
+            }
+
+            list.SelectedItem = Word("arbete");
+            HoverAction("frihet", "Redigera frihet").RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(Word("frihet").IsEditing && !Word("arbete").IsEditing,
+                "edit targets the row containing the clicked icon even with a different row selected");
+            Word("frihet").Draft = "friheten";
+            typeof(WordListWindow).GetMethod("SaveEditing", Fields).Invoke(editor, null);
+            Check(Word("friheten") != null && Word("arbete") != null, "saving changes only the clicked word");
+
+            list.SelectedItem = Word("arbete");
+            var remove = HoverAction("hemma", "Ta bort hemma");
+            string prompt = null;
+            Dispatcher.CurrentDispatcher.BeginInvoke(new Action(() =>
+            {
+                var confirmation = editor.RemovalConfirmation;
+                if (confirmation == null) return;
+                prompt = Descendants<TextBlock>(confirmation.Content as DependencyObject)
+                    .First(text => text.Text.StartsWith("Ta bort ”", StringComparison.Ordinal)).Text;
+                Descendants<Button>(confirmation).Single(button => Equals(button.Content, "Ta bort"))
+                    .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            }), DispatcherPriority.ApplicationIdle);
+            remove.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            Check(prompt == "Ta bort ”hemma”?" && list.Items.Cast<WordListItem>().All(word => word.Word != "hemma")
+                && storage.Load("words.json", new Dictionary<string, int>()).ContainsKey("arbete"),
+                "remove confirms and deletes the row containing the clicked icon");
+            editor.Close();
+        }
+        finally
+        {
+            Field<TabbedWordListWindow>(keyboard, "wordListWin")?.Close();
+            keyboard.Close();
+            if (string.Equals(profile.Parent?.FullName, Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.GetTempPath())),
+                StringComparison.OrdinalIgnoreCase))
+                profile.Delete(recursive: true);
+        }
     }
 
     static void OtherDialogs(string output)

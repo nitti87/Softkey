@@ -706,7 +706,7 @@ class WordListWindow : Window
         return template;
     }
 
-    static FrameworkElementFactory RowIconAction(string outline, Brush stroke, string tooltip, string accessibleName,
+    FrameworkElementFactory RowIconAction(string outline, Brush stroke, string tooltip, string accessibleName,
         Action action, bool primary = false)
     {
         var button = new FrameworkElementFactory(typeof(Button));
@@ -731,9 +731,14 @@ class WordListWindow : Window
         glyph.SetValue(HeightProperty, 13.5);
         button.AppendChild(glyph);
 
-        button.AddHandler(Button.ClickEvent, new RoutedEventHandler((_, e) =>
+        button.AddHandler(Button.ClickEvent, new RoutedEventHandler((sender, e) =>
         {
-            action();
+            if (sender is Button { DataContext: WordListItem item })
+            {
+                // Hover can display actions on a row before the ListBox selects it.
+                wordList.SelectedItem = item;
+                if (wordList.SelectedItem == item) action();
+            }
             e.Handled = true;
         }));
         return button;

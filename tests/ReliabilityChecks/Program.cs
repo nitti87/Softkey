@@ -493,8 +493,69 @@ static class Program
 
         Set(window, "closeConfirmed", true);
         window.Close();
+        UpdateRetention(assembly);
         foreach (string file in Directory.GetFiles(folder)) File.Delete(file);
         Directory.Delete(folder);
+    }
+
+    static void UpdateRetention(Assembly assembly)
+    {
+        var installer = assembly.GetType("SoftKeyUpdateInstaller", true);
+        var updates = assembly.GetType("SoftKeyUpdates", true);
+        var pruneBackups = installer.GetMethod("PruneCompletedBackups", BindingFlags.Static | BindingFlags.NonPublic);
+        var pruneCache = updates.GetMethod("PrunePackageCache", BindingFlags.Static | BindingFlags.NonPublic);
+        var root = Directory.CreateTempSubdirectory("SoftKey-update-retention-");
+        try
+        {
+            var main = root.CreateSubdirectory("installation");
+            var cache = root.CreateSubdirectory("SoftKey").CreateSubdirectory("Updates");
+            string Stage(int? build, int backupCount = 1, string name = null)
+            {
+                string path = main.CreateSubdirectory(name ?? $"update-{Guid.NewGuid():N}").FullName;
+                File.WriteAllText(Path.Combine(path, "package.zip"), "package");
+                if (build.HasValue) File.WriteAllText(Path.Combine(path, "previous-build"), build.Value.ToString());
+                for (int i = 0; i < backupCount; i++) File.WriteAllText(Path.Combine(path, $"{i}.backup"), "backup");
+                return path;
+            }
+
+            string retired = Stage(12);
+            string locked = Stage(13);
+            string recovery = Stage(null);
+            string unmappedFolder = Stage(11, name: "update-personal");
+            string withUnknownFile = Stage(11);
+            File.WriteAllText(Path.Combine(withUnknownFile, "settings.json"), "personal");
+            string incompleteReserve = Stage(15);
+            string retained = Stage(null, backupCount: 16);
+
+            pruneBackups.Invoke(null, new object[] { main.FullName, incompleteReserve, 15L, 16 });
+            Check(Directory.Exists(retired), "backup pruning waits for a complete replacement reserve");
+
+            using (new FileStream(Path.Combine(locked, "0.backup"), FileMode.Open, FileAccess.Read, FileShare.None))
+            {
+                pruneBackups.Invoke(null, new object[] { main.FullName, retained, 15L, 16 });
+                Check(!Directory.Exists(retired) && File.Exists(Path.Combine(locked, "previous-build"))
+                    && File.ReadAllText(Path.Combine(retained, "previous-build")) == "15",
+                    "cleanup retains the newly backed-up version and leaves a locked backup eligible for retry");
+            }
+            pruneBackups.Invoke(null, new object[] { main.FullName, retained, 15L, 16 });
+            Check(!Directory.Exists(locked) && Directory.Exists(retained) && Directory.Exists(recovery)
+                && Directory.Exists(unmappedFolder) && File.Exists(Path.Combine(withUnknownFile, "settings.json")),
+                "cleanup retries old completed backups and preserves recovery and unrelated files");
+
+            var files = new[] { "SoftKey-update-15.zip", "SoftKey-update-16.zip", "SoftKey-update-17.zip",
+                "SoftKey-update-014.zip", "settings.json" };
+            foreach (string name in files) File.WriteAllText(Path.Combine(cache.FullName, name), name);
+            pruneCache.Invoke(null, new object[] { cache.FullName, 16L });
+            Check(!File.Exists(Path.Combine(cache.FullName, files[0]))
+                && files.Skip(1).All(name => File.Exists(Path.Combine(cache.FullName, name))),
+                "cache cleanup removes only recognized installers older than the verified installed build");
+        }
+        finally
+        {
+            if (string.Equals(root.Parent?.FullName, Path.TrimEndingDirectorySeparator(Path.GetFullPath(Path.GetTempPath())),
+                StringComparison.OrdinalIgnoreCase))
+                root.Delete(recursive: true);
+        }
     }
 
     static int signInKeyCalls;
