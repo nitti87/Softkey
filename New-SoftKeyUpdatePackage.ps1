@@ -60,9 +60,19 @@ try {
         $env:SOFTKEY_GITHUB_ACTIONS_TOKEN = $null
         $options = @('-Build','-SignOnly','-IncludeStartup','-Configuration','Release','-SignToolPath',$signTool,
             '-UpdateBuildNumber',$run.run_number,'-UpdateCommit',$commit)
-        if ($Unattended) { $options += '-UnattendedSignOnly' }
-        & $windowsPowerShell -NoProfile -ExecutionPolicy RemoteSigned -File .\Install-Local-UIAccess.ps1 @options
-        if ($LASTEXITCODE -ne 0) { throw "SoftKey signing failed with exit code $LASTEXITCODE." }
+        $hostOptions = @('-NoProfile', '-ExecutionPolicy', 'RemoteSigned')
+        if ($Unattended) {
+            $hostOptions += '-NonInteractive'
+            $options += '-UnattendedSignOnly'
+        }
+        & $windowsPowerShell @hostOptions -File .\Install-Local-UIAccess.ps1 @options
+        if ($LASTEXITCODE -ne 0) {
+            $signingExitCode = $LASTEXITCODE
+            $report = Join-Path $source 'obj\UIAccessTest\signing-result.json'
+            $detail = try { (Get-Content -LiteralPath $report -Raw | ConvertFrom-Json).Message } catch { $null }
+            if ($detail) { throw "SoftKey packaging failed (exit $signingExitCode). $detail" }
+            throw "SoftKey packaging stopped before writing a signing result (exit $signingExitCode)."
+        }
     } finally {
         $env:SOFTKEY_GITHUB_ACTIONS_TOKEN = $environmentToken
         Pop-Location

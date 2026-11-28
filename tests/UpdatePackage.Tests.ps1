@@ -143,7 +143,7 @@ try {
             digest='sha256:' + (Get-FileHash -LiteralPath $archive).Hash.ToLowerInvariant()
         }
         $release = [pscustomobject]@{
-            draft=$false; prerelease=$true; tag_name='softkey-preview-42'; target_commitish=$commit
+            id=7; draft=$false; prerelease=$true; tag_name='softkey-preview-42'; target_commitish=$commit
             body='Changes shown before the package is downloaded.'; published_at='2026-11-27T12:00:00Z'; assets=@($asset)
         }
         $transfer = @{Count=0; Bytes=0; Verifications=0}
@@ -151,12 +151,18 @@ try {
             if ($Headers.ContainsKey('Authorization')) { throw 'Public discovery attempted to authenticate.' }
             $release
         }
+        function Invoke-RestMethod($Uri, $Headers, [switch]$UseBasicParsing, $MaximumRedirection, $TimeoutSec) {
+            if ($Uri -cne "$softKeyReleaseApi/releases/tags/softkey-preview-42" -or $Headers.ContainsKey('Authorization')) {
+                throw 'Publication must use the same release tag that public clients see, without credentials.'
+            }
+            $release
+        }
         function Copy-SoftKeyReleaseAsset($Asset, [hashtable]$Headers, [IO.Stream]$Destination, [scriptblock]$OnBytes) {
             if ($Headers.ContainsKey('Authorization')) { throw 'Public download attempted to authenticate.' }
             $transfer.Count++
             $bytes = [IO.File]::ReadAllBytes($archive)
             $Destination.Write($bytes, 0, $bytes.Length)
-            & $OnBytes $bytes.Length $Asset.size
+            if ($OnBytes) { & $OnBytes $bytes.Length $Asset.size }
         }
         $public = Get-SoftKeyPublicReleaseHeaders
         $preview = Find-SoftKeyPreview 41 $public
@@ -176,6 +182,17 @@ try {
                 "Commit: '$($receivedPackage.Commit)' (expected '$commit'). Paths: '$($receivedPackage.VerifiedDownload)' / '$($retriedPackage.VerifiedDownload)'.")
         }
         Write-Output 'PASS public discovery did not download, and the user-initiated download verified its bytes and signature'
+
+        $release.draft = $true
+        Assert-UpdateRejected { Confirm-SoftKeyPublicPreview $release $asset $manifest $receivedPackage.VerifiedDownload $certificate } `
+            'not yet visible on the public GitHub release'
+        if ($transfer.Count -ne 1) { throw 'A draft must not be downloaded through the public path.' }
+        $release.draft = $false
+        $confirmed = Confirm-SoftKeyPublicPreview $release $asset $manifest $receivedPackage.VerifiedDownload $certificate
+        if ($confirmed.Commit -cne $commit -or $transfer.Count -ne 2) {
+            throw 'Publication must verify a fresh public download even when a verified local copy already exists.'
+        }
+        Write-Output 'PASS publication requires a signed download accessible without credentials'
     }
 
     $feed = Join-Path $scratch 'OneDrive\SoftKey\Updates'

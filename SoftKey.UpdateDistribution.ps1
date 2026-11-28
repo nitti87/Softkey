@@ -194,6 +194,22 @@ function Save-SoftKeyReleaseAsset {
     }
 }
 
+function Confirm-SoftKeyPublicPreview($Release, $Asset, $Manifest, [string]$Path, $Certificate) {
+    $headers = Get-SoftKeyPublicReleaseHeaders
+    $headers['Cache-Control'] = 'no-cache'
+    $tag = "softkey-preview-$($Manifest.BuildNumber)"
+    $publicRelease = Invoke-RestMethod -Uri "$softKeyReleaseApi/releases/tags/$tag" -Headers $headers `
+        -UseBasicParsing -MaximumRedirection 0 -TimeoutSec 25
+    $publicAsset = Get-SoftKeyReleaseAsset $publicRelease $Manifest.BuildNumber
+    if ($publicRelease.id -ne $Release.id -or $publicRelease.draft -ne $false -or $publicRelease.prerelease -ne $true -or
+        $publicRelease.target_commitish -cne $Manifest.Commit -or -not $publicAsset -or
+        $publicAsset.digest -cne $Asset.digest -or $publicAsset.size -ne $Asset.size) {
+        throw 'The signed update is not yet visible on the public GitHub release.'
+    }
+    Save-SoftKeyReleaseAsset -Asset $publicAsset -Headers $headers -Path $Path -Certificate $Certificate `
+        -BuildNumber $Manifest.BuildNumber -Commit $Manifest.Commit
+}
+
 function Find-SoftKeyPreview([long]$InstalledBuildNumber, [hashtable]$Headers) {
     $candidate = $null
     $asset = $null

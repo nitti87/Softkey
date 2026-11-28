@@ -69,14 +69,19 @@ try {
 
         $received = (New-Item -ItemType Directory -Path (Join-Path $PSScriptRoot 'obj\Updates\Received') -Force).FullName
         $receivedPackage = Join-Path $received $name
-        $null = Save-SoftKeyReleaseAsset -Asset $asset -Headers $headers -Path $receivedPackage `
-            -Certificate $certificate -BuildNumber $manifest.BuildNumber -Commit $manifest.Commit
-
+        if ($release.draft) {
+            $null = Save-SoftKeyReleaseAsset -Asset $asset -Headers $headers -Path $receivedPackage `
+                -Certificate $certificate -BuildNumber $manifest.BuildNumber -Commit $manifest.Commit
+        }
         if ($PublishPreview -and $release.draft) {
             $body = [Text.Encoding]::UTF8.GetBytes((@{draft=$false; prerelease=$true; make_latest='false'} | ConvertTo-Json -Compress))
             $release = Invoke-RestMethod -Uri "$softKeyReleaseApi/releases/$($release.id)" -Method Patch -Body $body `
                 -ContentType 'application/json; charset=utf-8' -Headers $headers -UseBasicParsing -MaximumRedirection 0 -TimeoutSec 25
             if ($release.draft -ne $false -or $release.prerelease -ne $true) { throw 'GitHub did not confirm publication of the preview.' }
+        }
+        if (-not $release.draft) {
+            # Confirm customers can see and download the published package without GitHub credentials.
+            $null = Confirm-SoftKeyPublicPreview $release $asset $manifest $receivedPackage $certificate
         }
 
         [pscustomobject]@{
