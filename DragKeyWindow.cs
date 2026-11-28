@@ -68,6 +68,7 @@ sealed class DragKeyWindow : Window
         autoClick = new DragKeyButton("AutoClick", DragKeySymbol.AutoClick, signIn: autoClickOnly);
         Title = DisplayName;
         WindowStyle = WindowStyle.None;
+        AllowsTransparency = true;
         ResizeMode = ResizeMode.NoResize;
         Width = size.HorizontalWidth;
         Height = size.FloatingHeight;
@@ -75,7 +76,7 @@ sealed class DragKeyWindow : Window
         ShowInTaskbar = ShowActivated = Focusable = false;
         FontFamily = new FontFamily("Segoe UI");
         Foreground = SoftKeyKeyDesign.PrimaryText;
-        Background = SoftKeyKeyDesign.WindowSurface;
+        Background = Brushes.Transparent;
         UseLayoutRounding = SnapsToDevicePixels = true;
         TextOptions.SetTextFormattingMode(this, TextFormattingMode.Display);
 
