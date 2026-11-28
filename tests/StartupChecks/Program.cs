@@ -44,6 +44,15 @@ static class StartupChecks
                 Console.WriteLine($"All {checks} desktop recovery checks passed.");
                 return 0;
             }
+            if (args.Length == 1 && args[0] == "--autoclick")
+            {
+                DwellClickState();
+                var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+                DwellPause();
+                app.Shutdown();
+                Console.WriteLine($"All {checks} Autoclick checks passed.");
+                return 0;
+            }
             if (args.Length == 1 && args[0] == "--word-list")
             {
                 var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
@@ -182,34 +191,49 @@ static class StartupChecks
         Check(!Tick(20, 0, DwellTarget.External, "original") && Tick(20, 800, DwellTarget.External, "original"),
             "a still pointer can complete the initial dwell");
         tracker.Complete(800, allowRepeat: false);
-        Check(tracker.IsBlockedAt(20, 20) && !tracker.IsBlockedAt(21, 20),
-            "the external check can be skipped only at the exact position of a completed one-shot click");
         Check(!Tick(20, 900, DwellTarget.External, "replaced") && !Tick(20, 1700, DwellTarget.External, "replaced"),
             "an external control replaced under a stationary pointer cannot click again with repeat disabled");
-        Check(!Tick(20, 1800, DwellTarget.None) && !Tick(20, 2600, DwellTarget.SoftKeyControl, "dialog")
+        Check(!Tick(21, 1750, DwellTarget.External, "replaced") && !Tick(21, 2550, DwellTarget.External, "replaced"),
+            "one pixel of movement after a click cannot rearm a replacement control");
+        Check(!Tick(20, 2560, DwellTarget.None) && !Tick(20, 2600, DwellTarget.SoftKeyControl, "dialog")
             && !Tick(20, 3400, DwellTarget.SoftKeyControl, "dialog"),
             "a disappearing target and a popup cannot rearm a stationary click");
-        Check(!Tick(22, 3500, DwellTarget.SoftKeyControl, "adjacent") && Tick(22, 4300, DwellTarget.SoftKeyControl, "adjacent"),
-            "a small movement to another control starts a new full dwell");
-        Check(!tracker.IsBlockedAt(20, 20), "moving rearms the old position without changing the selected dwell time");
+        Check(!Tick(23, 3500, DwellTarget.SoftKeyControl, "adjacent")
+            && !Tick(24, 4400, DwellTarget.SoftKeyControl, "adjacent")
+            && !Tick(24, 5199, DwellTarget.SoftKeyControl, "adjacent") && Tick(24, 5200, DwellTarget.SoftKeyControl, "adjacent"),
+            "a four-pixel movement inside the normal tolerance rearms a nearby control with a full dwell");
+        tracker.Complete(5200, allowRepeat: false);
+        Check(tracker.ObserveMovement(24, 24, 10) && !Tick(24, 5300, DwellTarget.SoftKeyControl, "adjacent")
+            && Tick(24, 6100, DwellTarget.SoftKeyControl, "adjacent"),
+            "vertical movement also rearms the same control after moving away and back");
 
         tracker = new DwellTracker();
         Tick(20, 0, DwellTarget.SoftKeyRepeat, "key", repeat: true);
         Check(Tick(21, 800, DwellTarget.SoftKeyRepeat, "key", repeat: true), "the repeatable key fires after the initial dwell");
         tracker.Complete(800, allowRepeat: true);
-        Check(!tracker.IsBlockedAt(21, 20), "repeatable clicks continue checking the target while the pointer stays still");
         Check(!Tick(21, 1500, DwellTarget.SoftKeyRepeat, "key", repeat: true)
             && Tick(21, 1600, DwellTarget.SoftKeyRepeat, "key", repeat: true),
             "enabled repeat still clicks on the selected interval for repeatable keys");
-        tracker.Complete(1600, allowRepeat: false);
+        tracker.Complete(1600, allowRepeat: true);
+        Check(!Tick(22, 1700, DwellTarget.SoftKeyControl, "popup", repeat: true)
+            && !Tick(22, 2500, DwellTarget.SoftKeyControl, "popup", repeat: true),
+            "an enabled repeat cannot transfer to a popup appearing within the rearm distance");
         tracker.Reset();
-        Check(!Tick(21, 2500, DwellTarget.SoftKeyControl, "popup", repeat: true)
+        Check(!Tick(21, 2600, DwellTarget.SoftKeyControl, "popup", repeat: true)
             && !Tick(21, 3300, DwellTarget.SoftKeyControl, "popup", repeat: true),
-            "a one-shot click is blocked at the click position through a reset even with repeat enabled");
-        tracker.Suppress(21, 20, DwellTarget.None, 4000);
+            "a target change remains blocked across a reset even with repeat enabled");
+        tracker.Suppress(21, 20);
         Check(!Tick(21, 4100, DwellTarget.External, "new") && !Tick(21, 4900, DwellTarget.External, "new")
-            && !Tick(22, 5000, DwellTarget.External, "new") && Tick(22, 5800, DwellTarget.External, "new"),
-            "suppression also holds when no target is initially present and ends when the pointer moves");
+            && !Tick(24, 5000, DwellTarget.External, "new") && !Tick(25, 5800, DwellTarget.External, "new")
+            && Tick(25, 6600, DwellTarget.External, "new"),
+            "explicit suppression holds across target changes until the pointer has moved four pixels");
+
+        tracker = new DwellTracker();
+        Tick(20, 0, DwellTarget.External, "new");
+        int visit = tracker.VisitVersion;
+        Check(tracker.ObserveMovement(31, 20, 10) && tracker.VisitVersion != visit
+            && !Tick(20, 800, DwellTarget.External, "new") && Tick(20, 1600, DwellTarget.External, "new"),
+            "movement while a target query is pending invalidates the old visit before the cursor returns");
     }
 
     static void ResponsiveWordFeedback()
@@ -1476,6 +1500,13 @@ static class StartupChecks
                 "the paused timer releases the remaining drag without resuming autoclick");
             Call(keyboard, "PerformDwell", DwellTarget.AutoClick);
             Check(settings.AutoClick, "the autoclick button remains a dwell target for deliberate resume");
+            settings.Repeat = true;
+            bool CanRepeat(DwellTarget target) => (bool)Call(keyboard, "CanRepeatDwell", target);
+            Check(CanRepeat(DwellTarget.External) && CanRepeat(DwellTarget.SoftKeyRepeat)
+                && !CanRepeat(DwellTarget.SoftKeyControl) && !CanRepeat(DwellTarget.AutoClick) && !CanRepeat(DwellTarget.DragDrop),
+                "repeat applies to regular keys and external left click without repeating dialogs, pause or drop");
+            Check(mouse.Select(MouseAction.Right) && !CanRepeat(DwellTarget.External),
+                "a selected external right click is one shot even with repeat enabled");
         }
         finally
         {

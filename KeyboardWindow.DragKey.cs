@@ -216,7 +216,7 @@ partial class KeyboardWindow
     void SuppressCurrentDwell()
     {
         if (Native.GetCursorPos(out var point))
-            dwellTracker.Suppress(point.X, point.Y, GetDwellTarget(point), DwellClock);
+            dwellTracker.Suppress(point.X, point.Y);
         else dwellTracker.Reset();
     }
 
@@ -243,7 +243,7 @@ partial class KeyboardWindow
         }
         windowDragFallbackTimer.Start();
         RefreshDragKey();
-        dwellTracker.Suppress(point.X, point.Y, DwellTarget.DragDrop, DwellClock);
+        dwellTracker.Suppress(point.X, point.Y);
         if (window == dragKeyWin) UpdateDragKeyDockPreview(new Point(point.X, point.Y));
         return true;
     }

@@ -5,74 +5,81 @@ enum DwellTarget { None, AutoClick, RightClick, DoubleClick, Drag, DragDrop, Mov
 // Tracks one dwell visit. A change of control also starts a new dwell, even inside the jitter box.
 sealed class DwellTracker
 {
+    const int RearmDistancePx = 4;
     int anchorX, anchorY;
     double since;
     DwellTarget target;
     object control;
     (int X, int Y) lastPoint;
-    (int X, int Y)? blockedPoint;
-    bool initialized, fired, repeatSuppressed, adoptControl;
+    (int X, int Y)? clickPoint;
+    bool initialized, repeating;
 
     public int VisitVersion { get; private set; }
-
-    public bool IsBlockedAt(int x, int y) => blockedPoint == (x, y);
 
     public void Reset()
     {
         // A redraw or transient hit-test failure is not pointer movement.
         initialized = false;
         control = null;
-        adoptControl = false;
+        repeating = false;
         VisitVersion++;
+    }
+
+    static bool MovedBeyond(int x, int y, int fromX, int fromY, int tolerance)
+        => Math.Abs((long)x - fromX) > tolerance || Math.Abs((long)y - fromY) > tolerance;
+
+    // Sample movement even when control identification is still running on a worker.
+    public bool ObserveMovement(int x, int y, int jitterPx)
+    {
+        if (clickPoint is { } origin && MovedBeyond(x, y, origin.X, origin.Y, RearmDistancePx - 1))
+        {
+            clickPoint = null;
+            if (!repeating) Reset();
+        }
+        if (initialized && MovedBeyond(x, y, anchorX, anchorY, jitterPx)) Reset();
+        return repeating || !clickPoint.HasValue;
     }
 
     public bool Update(int x, int y, DwellTarget nextTarget, double now, int dwellMs, int jitterPx, bool repeat,
         object nextControl = null)
     {
-        var point = (x, y);
-        if (blockedPoint != point) blockedPoint = null;
+        if (!ObserveMovement(x, y, jitterPx)) return false;
         if (nextTarget == DwellTarget.None) { Reset(); return false; }
-        if (adoptControl) { control = nextControl; adoptControl = false; }
-        if (blockedPoint.HasValue) return false;
-        lastPoint = point;
-        if (!initialized || target != nextTarget || !Equals(control, nextControl)
-            || Math.Abs((long)x - anchorX) > jitterPx || Math.Abs((long)y - anchorY) > jitterPx)
+        if (!initialized || target != nextTarget || !Equals(control, nextControl))
         {
+            // An enabled repeat belongs to the control that was clicked.
+            if (clickPoint.HasValue) { Reset(); return false; }
             anchorX = x;
             anchorY = y;
             target = nextTarget;
             control = nextControl;
             since = now;
             initialized = true;
-            fired = repeatSuppressed = false;
+            repeating = false;
+            lastPoint = (x, y);
             return false;
         }
-        return !(fired && (!repeat || repeatSuppressed)) && now - since >= dwellMs;
+        lastPoint = (x, y);
+        return (!repeating || repeat) && now - since >= dwellMs;
     }
 
     public void Complete(double now, bool allowRepeat)
     {
-        fired = true;
-        repeatSuppressed = !allowRepeat;
-        blockedPoint = initialized && repeatSuppressed ? lastPoint : null;
+        if (initialized) clickPoint = lastPoint;
+        repeating = initialized && allowRepeat;
         since = now;
     }
 
     public double Progress(double now, int dwellMs)
     {
         if (!initialized) return 0;
-        if (fired && repeatSuppressed) return 1;
+        if (clickPoint.HasValue && !repeating) return 1;
         return Math.Clamp((now - since) / dwellMs, 0, 1);
     }
 
-    public void Suppress(int x, int y, DwellTarget nextTarget, double now)
+    public void Suppress(int x, int y)
     {
         Reset();
-        blockedPoint = null;
-        Update(x, y, nextTarget, now, 0, 0, false);
-        Complete(now, allowRepeat: false);
-        blockedPoint = (x, y);
-        // The first hit test after a drag/drop or mode change belongs to this suppressed visit.
-        adoptControl = true;
+        clickPoint = (x, y);
     }
 }

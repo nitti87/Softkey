@@ -108,7 +108,7 @@ partial class KeyboardWindow
 
     void Dwell(object s, EventArgs e)
     {
-        if (desktopSessionSuspended || (secureMode && !inputDesktopActive()))
+        if (!DwellDesktopActive())
         {
             mouseWin?.ResetDwellPreview();
             desktopDwellTargets?.Leave();
@@ -118,10 +118,7 @@ partial class KeyboardWindow
         if (secureMode) RefreshKeyboardLabels();
         if (!cfg.AutoClick && mouseActions.HeldDragButton.HasValue && CancelMouseActionCore(false))
             UpdateDwellTimer();
-        var heldButton = mouseActions.HeldDragButton;
-        if (!Native.GetCursorPos(out var p) || (heldButton != MouseAction.RightDrag && Native.RightMouseButtonDown)
-            || (heldButton != MouseAction.Drag && Native.LeftMouseButtonDown)
-            || (heldButton != MouseAction.MiddleDrag && Native.MiddleMouseButtonDown))
+        if (!TryReadDwellPointer(out var p))
         {
             if (mouseActions.IsWindowDragging) CancelMouseAction();
             mouseWin?.ResetDwellPreview();
@@ -129,55 +126,78 @@ partial class KeyboardWindow
             dwellTracker.Reset();
             return;
         }
-        if (mouseWin?.UpdateDwellPreview(p, DwellClock) == true)
+        bool canStartDwell = dwellTracker.ObserveMovement(p.X, p.Y, cfg.JitterPx);
+        double now = DwellClock;
+        if (mouseWin?.UpdateDwellPreview(p, now) == true)
         {
             desktopDwellTargets?.Leave();
             dwellTracker.Reset();
             return;
         }
+        if (!canStartDwell) return;
         DwellTarget target = GetDwellTarget(p);
         if (!secureMode && target == DwellTarget.External)
         {
-            // A completed single click cannot fire again at this position, even if the control changes.
-            if (!cfg.Repeat && mouseActions.Selected == MouseAction.Left && dwellTracker.IsBlockedAt(p.X, p.Y)) return;
             desktopDwellTargets ??= new DesktopDwellTargets(Dispatcher);
-            desktopDwellTargets.Observe(p, target, DwellClock, dwellTracker.VisitVersion, TrackExternalDwell);
+            desktopDwellTargets.Observe(p, target, now, dwellTracker.VisitVersion, TrackExternalDwell);
             return;
         }
         desktopDwellTargets?.Leave();
-        object control = target is DwellTarget.SoftKeyControl or DwellTarget.SoftKeyRepeat
-            ? DesktopDwellTargets.FindLocal(p, wordMenuAnchor) : null;
-        TrackDwell(p, target, control);
+        TrackDwell(p, target, now);
     }
 
     void TrackExternalDwell(DesktopDwellTargets.Sample sample, DwellTarget target, int visitVersion)
     {
-        if (!IsLoaded || desktopSessionSuspended || !cfg.AutoClick || visitVersion != dwellTracker.VisitVersion
-            || !Native.GetCursorPos(out var point) || !sample.Contains(point) || !Native.IsWindowAt(point, sample.Window)
-            || Native.LeftMouseButtonDown || Native.RightMouseButtonDown || Native.MiddleMouseButtonDown
-            || GetDwellTarget(point) != target) return;
-        TrackDwell(point, target, sample.Identity);
+        if (!IsLoaded || !DwellDesktopActive() || visitVersion != dwellTracker.VisitVersion || !TryReadDwellPointer(out var point)
+            || !sample.Contains(point) || !Native.IsWindowAt(point, sample.Window) || GetDwellTarget(point) != target) return;
+        TrackDwell(point, target, DwellClock, sample);
     }
 
-    void TrackDwell(Native.POINT point, DwellTarget target, object control)
+    bool DwellDesktopActive() => !desktopSessionSuspended && (!secureMode || inputDesktopActive());
+
+    bool IsDwellTargetEnabled(DwellTarget target)
+        => target != DwellTarget.None && (cfg.AutoClick || target == DwellTarget.AutoClick);
+
+    bool CanRepeatDwell(DwellTarget target)
+        => cfg.Repeat && (target == DwellTarget.SoftKeyRepeat
+            || (target == DwellTarget.External && mouseActions.Selected == MouseAction.Left));
+
+    bool TryReadDwellPointer(out Native.POINT point)
     {
-        if (dwellTracker.Update(point.X, point.Y, target, DwellClock, cfg.DwellMs, cfg.JitterPx, cfg.Repeat, control))
+        var heldButton = mouseActions.HeldDragButton;
+        return Native.GetCursorPos(out point)
+            && (heldButton == MouseAction.Drag || !Native.LeftMouseButtonDown)
+            && (heldButton == MouseAction.RightDrag || !Native.RightMouseButtonDown)
+            && (heldButton == MouseAction.MiddleDrag || !Native.MiddleMouseButtonDown);
+    }
+
+    void TrackDwell(Native.POINT point, DwellTarget target, double now, DesktopDwellTargets.Sample? external = null)
+    {
+        if (!IsDwellTargetEnabled(target)) { dwellTracker.Reset(); return; }
+        var window = external?.Window ?? Native.WindowFromPoint(point);
+        if (window == IntPtr.Zero) { dwellTracker.Reset(); return; }
+        bool localControl = target is DwellTarget.SoftKeyControl or DwellTarget.SoftKeyRepeat;
+        object control = localControl ? DesktopDwellTargets.FindLocal(point, wordMenuAnchor) : external?.Identity;
+        bool repeat = CanRepeatDwell(target);
+        if (!dwellTracker.Update(point.X, point.Y, target, now, cfg.DwellMs, cfg.JitterPx, repeat, control)) return;
+
+        // Recheck the live pointer and target before dispatching the click. A cached UIA sample
+        // may only be used in its window and bounds, with no blocking UIA call on the UI thread.
+        if (!TryReadDwellPointer(out var current) || !Native.IsWindowAt(current, window)
+            || GetDwellTarget(current) != target || (external.HasValue && !external.Value.Contains(current))
+            || (localControl && !Equals(control, DesktopDwellTargets.FindLocal(current, wordMenuAnchor))))
+        {
+            dwellTracker.Reset();
+            return;
+        }
+        if (dwellTracker.Update(current.X, current.Y, target, DwellClock, cfg.DwellMs, cfg.JitterPx, repeat, control))
             PerformDwell(target);
     }
 
     void PerformDwell(DwellTarget target)
     {
-        if (desktopSessionSuspended || (secureMode && !inputDesktopActive())) { dwellTracker.Reset(); return; }
-        if (target == DwellTarget.None || (!cfg.AutoClick && target != DwellTarget.AutoClick)) return;
-        bool special = target == DwellTarget.DragDrop
-            || WindowResizeGeometry.Edges(target) != WindowResizeEdges.None
-            || target is DwellTarget.MoveKeyboard or DwellTarget.MoveDragKey
-            || (target == DwellTarget.External && mouseActions.Selected != MouseAction.Left);
-        bool singleAction = target is DwellTarget.AutoClick or DwellTarget.RightClick
-            or DwellTarget.DoubleClick or DwellTarget.Drag or DwellTarget.MiddleDrag or DwellTarget.RightDrag or DwellTarget.UndockDragKey
-            or DwellTarget.ToggleKeyboard or DwellTarget.ToggleKeyboardHeader or DwellTarget.CloseSoftKey
-            or DwellTarget.MoveKeyboardEdge or DwellTarget.SoftKeyControl;
-        dwellTracker.Complete(DwellClock, allowRepeat: cfg.Repeat && !singleAction && !special);
+        if (!DwellDesktopActive() || !IsDwellTargetEnabled(target)) { dwellTracker.Reset(); return; }
+        dwellTracker.Complete(DwellClock, CanRepeatDwell(target));
         if (target == DwellTarget.AutoClick) ToggleAutoClick();
         else if (target == DwellTarget.RightClick) ToggleRightClick();
         else if (target == DwellTarget.DoubleClick) ToggleDoubleClick();
@@ -209,10 +229,10 @@ partial class KeyboardWindow
         }
         else if (target is DwellTarget.External or DwellTarget.DragDrop)
         {
+            bool changesMouseAction = target == DwellTarget.DragDrop || mouseActions.Selected != MouseAction.Left;
             ReportInputResult(mouseActions.IsWindowDragging ? FinishWindowDrag() : mouseActions.Perform());
             RefreshDragKey();
-            // Drag start/drop changes the target category. Require movement before the next dwell.
-            if (special) SuppressCurrentDwell();
+            if (changesMouseAction) SuppressCurrentDwell();
         }
         else ReportInputResult(Native.Click(0));
     }
