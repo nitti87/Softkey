@@ -578,7 +578,7 @@ static class StartupChecks
                 && option.Content is DockPanel { Children: { Count: 2 } } card
                 && card.Children[0] is Border
                 {
-                    IsHitTestVisible: false, CornerRadius.TopLeft: 19, Child: System.Windows.Shapes.Path
+                    IsHitTestVisible: false, CornerRadius.TopLeft: 8, Child: System.Windows.Shapes.Path
                 })
             && automatic.TranslatePoint(default, login).Y - login.ActualHeight >= 8
             && afterUnlock.TranslatePoint(default, automatic).Y - automatic.ActualHeight >= 8,
